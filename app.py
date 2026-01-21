@@ -72,7 +72,6 @@ def admin_required(view_func):
     return wrapped
 
 
-
 # Routes
 
 # Temporary backdoors for dev
@@ -90,7 +89,7 @@ def make_me_admin():
     session["role"] = "admin"
     return "You are now admin."
 
-# General routes
+# Other routes
 @app.route("/")
 def home():
     user_email = session.get("user")
@@ -138,7 +137,6 @@ def logout():
     session.pop("user", None)
     session.pop("role", None)
     return redirect(url_for("home"))
-
 
 # Event routes
 @app.route("/events")
@@ -219,7 +217,48 @@ def admin_event_delete(event_id):
 
     return redirect(url_for("list_events"))
 
+# Event RSVP routes
+@app.route("/events/<int:event_id>/rsvp", methods=["POST"])
+@login_required
+def create_rsvp(event_id):
+    user = get_current_user()
+    event = Event.query.get_or_404(event_id)
 
+    rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
+    if rsvp:
+        rsvp.status = "going"
+    else:
+        rsvp = RSVP(user_id=user.id, event_id=event.id, status="going")
+        db.session.add(rsvp)
+
+    db.session.commit()
+    return redirect(url_for("event_detail", event_id=event.id))
+
+@app.route("/events/<int:event_id>/rsvp/cancel", methods=["POST"])
+@login_required
+def cancel_rsvp(event_id):
+    user = get_current_user()
+    event = Event.query.get_or_404(event_id)
+
+    rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
+    if rsvp:
+        rsvp.status = "cancelled"
+        db.session.commit()
+
+    return redirect(url_for("event_detail", event_id=event.id))
+
+@app.route("/my-rsvps")
+@login_required
+def my_rsvps():
+    user = get_current_user()
+    rows = (
+        db.session.query(RSVP, Event)
+        .join(Event, RSVP.event_id == Event.id)
+        .filter(RSVP.user_id == user.id, RSVP.status == "going")
+        .order_by(Event.start_time.asc())
+        .all()
+    )
+    return render_template("my_rsvps.html", rows=rows, user_email=session.get("user"), role=session.get("role"))
 
 
 
