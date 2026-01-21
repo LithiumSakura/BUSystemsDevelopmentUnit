@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{% if mode == "edit" %}Edit{% else %}Create{% endif %} Event</h2>
+
+<form method="post">
+  <label>Title</label><br>
+  <input name="title" required value="{{ event.title if event else '' }}"><br><br>
+
+  <label>Description</label><br>
+  <textarea name="description" rows="4">{{ event.description if event else '' }}</textarea><br><br>
+
+  <label>Location</label><br>
+  <input name="location" value="{{ event.location if event else '' }}"><br><br>
+
+  <label>Start time</label><br>
+  <input type="datetime-local" name="start_time" required
+         value="{% if event %}{{ event.start_time.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"><br><br>
+
+  <label>End time</label><br>
+  <input type="datetime-local" name="end_time" required
+         value="{% if event %}{{ event.end_time.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"><br><br>
+
+  <button type="submit">Save</button>
+</form>
+{% endblock %}
