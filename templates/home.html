@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Student Society Management System</h1>
+
+{% if session.get("user") %}
+<p>Logged in as {{ session["user"] }}</p>
+{% else %}
+<p>You are not logged in</p>
+{% endif %}
+
+{% endblock %}
