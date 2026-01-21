@@ -9,13 +9,13 @@
         <a href="{{ url_for('home') }}">Home</a>
         <a href="{{ url_for('list_events') }}">Events</a>
 
-        {% if session.get("user") %}
+        {% if session.get("user") %} <!-- Allowing logged-in users to view RSVP -->
         <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
         <a href="{{ url_for('logout') }}">Logout</a>
-        
-        {% else %}
+        {% else %} <!-- Shows register for non-logged-in users -->
         <a href="{{ url_for('register') }}">Register</a>
         <a href="{{ url_for('login') }}">Login</a>
+        {% endif %}
     </nav>
     <hr>
     {% block content %}{% endblock %}
