@@ -142,7 +142,7 @@ def logout():
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
-    return render_template("events_list.html", events=events, user_email=session.get("user"), role=session.get("role"))
+    return render_template("event_list.html", events=events, user_email=session.get("user"), role=session.get("role"))
 
 @app.route("/events/<int:event_id>")
 def event_detail(event_id):
