@@ -161,6 +161,7 @@ def event_detail(event_id):
         existing_rsvp=existing_rsvp
     )
 
+# Society committee member view
 @app.route("/admin/events/new", methods=["GET", "POST"])
 @admin_required
 def admin_event_new():
@@ -210,7 +211,6 @@ def admin_event_edit(event_id):
 def admin_event_delete(event_id):
     event = Event.query.get_or_404(event_id)
 
-    # delete RSVPs first (simple approach)
     RSVP.query.filter_by(event_id=event.id).delete()
     db.session.delete(event)
     db.session.commit()
@@ -220,31 +220,26 @@ def admin_event_delete(event_id):
 # Event RSVP routes
 @app.route("/events/<int:event_id>/rsvp", methods=["POST"])
 @login_required
-def create_rsvp(event_id):
+def toggle_rsvp(event_id):
     user = get_current_user()
     event = Event.query.get_or_404(event_id)
 
+    # Checkbox sends value only if checked
+    is_going = request.form.get("going") == "on"
+
     rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
+
     if rsvp:
-        rsvp.status = "going"
+        rsvp.status = "going" if is_going else "cancelled"
     else:
-        rsvp = RSVP(user_id=user.id, event_id=event.id, status="going")
+        rsvp = RSVP(
+            user_id=user.id,
+            event_id=event.id,
+            status="going" if is_going else "cancelled"
+        )
         db.session.add(rsvp)
 
     db.session.commit()
-    return redirect(url_for("event_detail", event_id=event.id))
-
-@app.route("/events/<int:event_id>/rsvp/cancel", methods=["POST"])
-@login_required
-def cancel_rsvp(event_id):
-    user = get_current_user()
-    event = Event.query.get_or_404(event_id)
-
-    rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
-    if rsvp:
-        rsvp.status = "cancelled"
-        db.session.commit()
-
     return redirect(url_for("event_detail", event_id=event.id))
 
 @app.route("/my-rsvps")

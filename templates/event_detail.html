@@ -18,18 +18,31 @@
 <hr>
 
 {% if user_email %}
-  {% if existing_rsvp and existing_rsvp.status == "going" %}
-    <p><b>Your RSVP:</b> Going ✅</p>
-    <form method="post" action="{{ url_for('cancel_rsvp', event_id=event.id) }}">
-      <button type="submit">Cancel RSVP</button>
+    <form method="post" action="{{ url_for('toggle_rsvp', event_id=event.id) }}">
+        <label>
+            <input
+                type="checkbox"
+                name="going"
+                {% if existing_rsvp and existing_rsvp.status == "going" %}
+                    checked
+                {% endif %}
+            >
+            I'm going
+        </label>
+
+        <br><br>
+        <button type="submit">Update RSVP</button>
     </form>
-  {% else %}
-    <form method="post" action="{{ url_for('create_rsvp', event_id=event.id) }}">
-      <button type="submit">RSVP: I'm going</button>
-    </form>
-  {% endif %}
-{% else %}
-  <p><a href="{{ url_for('login') }}">Log in</a> to RSVP.</p>
+
+    {% if existing_rsvp %}
+        {% if existing_rsvp.status == "going" %}
+            <p><b>Status:</b> Going</p>
+        {% else %}
+            <p><b>Status:</b> RSVP cancelled</p>
+        {% endif %}
+    {% endif %}
+    {% else %}
+    <p><a href="{{ url_for('login') }}">Log in</a> to RSVP.</p>
 {% endif %}
 
 {% endblock %}
