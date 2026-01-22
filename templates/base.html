@@ -8,6 +8,8 @@
     <nav>
         {% if session.get("role") == "committee" %}
             <span style="margin-left:10px; font-weight:bold;">Committee</span>
+        {% if session.get("role") == "admin" %}
+            <a href="{{ url_for('admin_logs') }}">Logs</a>
         {% endif %}
 
         <a href="{{ url_for('home') }}">Home</a>

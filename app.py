@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from functools import wraps
 from flask import abort
+from google.cloud import firestore
 
 load_dotenv()
 
@@ -13,10 +14,14 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 
 
-# Configuring SQLAlchemy
+# Databases setup
+
+## SQLAlchemy
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///society.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
+## Firestore
+firestore_db = firestore.Client()
 
 
 # SQL Models
@@ -87,6 +92,23 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
     return wrapped
 
+# For firestore DB
+def log_action(action, user=None, extra=None):
+    data = {
+        "action": action,
+        "timestamp": datetime.utcnow()
+    }
+
+    if user:
+        data["user_email"] = user.email
+        data["user_id"] = user.id
+        data["role"] = user.role
+
+    if extra:
+        data.update(extra)
+
+    firestore_db.collection("activity_logs").add(data)
+
 
 # Routes
 
@@ -114,36 +136,38 @@ def admin_users():
         user_id = int(request.form["user_id"])
         is_committee = request.form.get("is_committee") == "on"
         position = request.form.get("committee_position")
-
         user = User.query.get_or_404(user_id)
-
         if is_committee:
             user.role = "committee"
             user.committee_position = position
         else:
             user.role = "member"
             user.committee_position = None
-
         db.session.commit()
+        log_action(
+            "ROLE_UPDATED",
+            user=get_current_user(),
+            extra={
+                "target_user_id": user.id,
+                "target_email": user.email,
+                "new_role": user.role,
+                "committee_position": user.committee_position
+            }
+        )
         return redirect(url_for("admin_users"))
-
     return render_template("admin_users.html", users=users)
 
-@app.route("/dev/make-committee/<position>")
-@login_required
-def make_committee(position):
-    valid_positions = ["President", "Secretary", "Treasurer"]
+@app.route("/admin/logs")
+@admin_required
+def admin_logs():
+    logs = (
+        firestore_db.collection("activity_logs")
+        .order_by("timestamp", direction=firestore.Query.DESCENDING)
+        .limit(50)
+        .stream()
+    )
+    return render_template("admin_logs.html", logs=logs)
 
-    if position not in valid_positions:
-        return "Invalid position", 400
-
-    user = get_current_user()
-    user.role = "committee"
-    user.committee_position = position
-    db.session.commit()
-
-    session["role"] = "committee"
-    return f"You are now Committee: {position}"
 
 
 # General user routes
@@ -183,6 +207,10 @@ def login():
         if user and check_password_hash(user.password_hash, password):
             session["user"] = user.email
             session["role"] = user.role
+            log_action(
+                "LOGIN",
+                user=user
+            )
             return redirect(url_for("home"))
         return "Invalid credentials"
     return render_template("login.html")
@@ -268,7 +296,6 @@ def admin_event_delete(event_id):
 def toggle_rsvp(event_id):
     user = get_current_user()
     event = Event.query.get_or_404(event_id)
-    # Checkbox sends value only if checked
     is_going = request.form.get("going") == "on"
     rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
     if rsvp:
@@ -281,6 +308,15 @@ def toggle_rsvp(event_id):
         )
         db.session.add(rsvp)
     db.session.commit()
+    log_action(
+        "RSVP_UPDATED",
+        user=user,
+        extra={
+            "event_id": event.id,
+            "event_title": event.title,
+            "new_status": rsvp.status
+        }
+    )
     return redirect(url_for("event_detail", event_id=event.id))
 
 @app.route("/my-rsvps")
