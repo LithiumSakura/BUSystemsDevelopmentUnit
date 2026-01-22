@@ -3,7 +3,14 @@
 <h1>Society Management System</h1>
 
 {% if user %}
-    <p>Hello {{ user.first_name }}</p>
+    <p>
+        Hello {{ user.first_name }}
+        {% if user.role == "committee" and user.committee_position %}
+            — {{ user.committee_position }}
+        {% elif user.role == "admin" %}
+            — Admin
+        {% endif %}
+    </p>
 {% else %}
     <p>You are not logged in</p>
 {% endif %}

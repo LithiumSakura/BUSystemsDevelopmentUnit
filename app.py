@@ -12,6 +12,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 
+
 # Configuring SQLAlchemy
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///society.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -22,11 +23,15 @@ db = SQLAlchemy(app)
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
+
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+
     role = db.Column(db.String(20), default="member", nullable=False)
+    committee_position = db.Column(db.String(50), nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 class Event(db.Model):
@@ -62,6 +67,16 @@ def login_required(view_func):
         return view_func(*args, **kwargs)
     return wrapped
 
+def committee_or_admin_required(view_func):
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login"))
+        if session.get("role") not in ["committee", "admin"]:
+            abort(403)
+        return view_func(*args, **kwargs)
+    return wrapped
+
 def admin_required(view_func):
     @wraps(view_func)
     def wrapped(*args, **kwargs):
@@ -75,7 +90,7 @@ def admin_required(view_func):
 
 # Routes
 
-# Temporary backdoors for dev
+# Admin backdoors / routes
 @app.route("/init-db")
 def init_db():
     db.create_all()
@@ -90,7 +105,48 @@ def make_me_admin():
     session["role"] = "admin"
     return "You are now admin."
 
-# Other routes
+@app.route("/admin/users", methods=["GET", "POST"])
+@admin_required
+def admin_users():
+    users = User.query.order_by(User.first_name.asc()).all()
+
+    if request.method == "POST":
+        user_id = int(request.form["user_id"])
+        is_committee = request.form.get("is_committee") == "on"
+        position = request.form.get("committee_position")
+
+        user = User.query.get_or_404(user_id)
+
+        if is_committee:
+            user.role = "committee"
+            user.committee_position = position
+        else:
+            user.role = "member"
+            user.committee_position = None
+
+        db.session.commit()
+        return redirect(url_for("admin_users"))
+
+    return render_template("admin_users.html", users=users)
+
+@app.route("/dev/make-committee/<position>")
+@login_required
+def make_committee(position):
+    valid_positions = ["President", "Secretary", "Treasurer"]
+
+    if position not in valid_positions:
+        return "Invalid position", 400
+
+    user = get_current_user()
+    user.role = "committee"
+    user.committee_position = position
+    db.session.commit()
+
+    session["role"] = "committee"
+    return f"You are now Committee: {position}"
+
+
+# General user routes
 @app.route("/")
 def home():
     user = get_current_user()
@@ -160,7 +216,7 @@ def event_detail(event_id):
 
 # Society committee member view
 @app.route("/admin/events/new", methods=["GET", "POST"])
-@admin_required
+@committee_or_admin_required
 def admin_event_new():
     if request.method == "POST":
         title = request.form["title"].strip()
@@ -184,7 +240,7 @@ def admin_event_new():
     return render_template("admin_event_form.html", mode="create")
 
 @app.route("/admin/events/<int:event_id>/edit", methods=["GET", "POST"])
-@admin_required
+@committee_or_admin_required
 def admin_event_edit(event_id):
     event = Event.query.get_or_404(event_id)
     if request.method == "POST":
@@ -198,7 +254,7 @@ def admin_event_edit(event_id):
     return render_template("admin_event_form.html", mode="edit", event=event)
 
 @app.route("/admin/events/<int:event_id>/delete", methods=["POST"])
-@admin_required
+@committee_or_admin_required
 def admin_event_delete(event_id):
     event = Event.query.get_or_404(event_id)
     RSVP.query.filter_by(event_id=event.id).delete()
