@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Student Society Management System</h1>
+<h1>Society Management System</h1>
 
-{% if user_email %}
-<p>Logged in as {{ user_email }}</p>
+{% if user %}
+    <p>Hello {{ user.first_name }}</p>
 {% else %}
-<p>You are not logged in</p>
+    <p>You are not logged in</p>
 {% endif %}
 
 {% endblock %}

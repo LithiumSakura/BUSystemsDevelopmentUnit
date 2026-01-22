@@ -22,8 +22,9 @@ db = SQLAlchemy(app)
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(100), nullable=False)
+    last_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(120), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default="member", nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -46,7 +47,7 @@ class RSVP(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
-# Creating all site roles
+# Creating roles
 def get_current_user():
     email = session.get("user")
     if not email:
@@ -92,20 +93,22 @@ def make_me_admin():
 # Other routes
 @app.route("/")
 def home():
-    user_email = session.get("user")
-    return render_template("home.html", user_email=user_email)
+    user = get_current_user()
+    return render_template("home.html", user=user)
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        first_name = request.form["first_name"].strip()
+        last_name = request.form["last_name"].strip()
         email = request.form["email"].strip().lower()
         password = request.form["password"]
-
         existing = User.query.filter_by(email=email).first()
         if existing:
             return "User already exists"
-
         user = User(
+            first_name=first_name,
+            last_name=last_name,
             email=email,
             password_hash=generate_password_hash(password),
             role="member"
@@ -113,7 +116,6 @@ def register():
         db.session.add(user)
         db.session.commit()
         return redirect(url_for("login"))
-
     return render_template("register.html")
 
 @app.route("/login", methods=["GET", "POST"])
@@ -121,15 +123,12 @@ def login():
     if request.method == "POST":
         email = request.form["email"].strip().lower()
         password = request.form["password"]
-
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password_hash, password):
             session["user"] = user.email
             session["role"] = user.role
             return redirect(url_for("home"))
-
         return "Invalid credentials"
-
     return render_template("login.html")
 
 @app.route("/logout")
@@ -147,12 +146,10 @@ def list_events():
 @app.route("/events/<int:event_id>")
 def event_detail(event_id):
     event = Event.query.get_or_404(event_id)
-
     user = get_current_user()
     existing_rsvp = None
     if user:
         existing_rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
-
     return render_template(
         "event_detail.html",
         event=event,
@@ -169,11 +166,9 @@ def admin_event_new():
         title = request.form["title"].strip()
         description = request.form.get("description", "").strip()
         location = request.form.get("location", "").strip()
-
         # Self-reminder, format: "YYYY-MM-DDTHH:MM"
         start_time = datetime.fromisoformat(request.form["start_time"])
         end_time = datetime.fromisoformat(request.form["end_time"])
-
         creator = get_current_user()
         event = Event(
             title=title,
@@ -186,35 +181,29 @@ def admin_event_new():
         db.session.add(event)
         db.session.commit()
         return redirect(url_for("list_events"))
-
     return render_template("admin_event_form.html", mode="create")
 
 @app.route("/admin/events/<int:event_id>/edit", methods=["GET", "POST"])
 @admin_required
 def admin_event_edit(event_id):
     event = Event.query.get_or_404(event_id)
-
     if request.method == "POST":
         event.title = request.form["title"].strip()
         event.description = request.form.get("description", "").strip()
         event.location = request.form.get("location", "").strip()
         event.start_time = datetime.fromisoformat(request.form["start_time"])
         event.end_time = datetime.fromisoformat(request.form["end_time"])
-
         db.session.commit()
         return redirect(url_for("event_detail", event_id=event.id))
-
     return render_template("admin_event_form.html", mode="edit", event=event)
 
 @app.route("/admin/events/<int:event_id>/delete", methods=["POST"])
 @admin_required
 def admin_event_delete(event_id):
     event = Event.query.get_or_404(event_id)
-
     RSVP.query.filter_by(event_id=event.id).delete()
     db.session.delete(event)
     db.session.commit()
-
     return redirect(url_for("list_events"))
 
 # Event RSVP routes
@@ -223,12 +212,9 @@ def admin_event_delete(event_id):
 def toggle_rsvp(event_id):
     user = get_current_user()
     event = Event.query.get_or_404(event_id)
-
     # Checkbox sends value only if checked
     is_going = request.form.get("going") == "on"
-
     rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
-
     if rsvp:
         rsvp.status = "going" if is_going else "cancelled"
     else:
@@ -238,7 +224,6 @@ def toggle_rsvp(event_id):
             status="going" if is_going else "cancelled"
         )
         db.session.add(rsvp)
-
     db.session.commit()
     return redirect(url_for("event_detail", event_id=event.id))
 
