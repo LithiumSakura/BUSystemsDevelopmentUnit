@@ -20,11 +20,11 @@ app.secret_key = os.getenv("SECRET_KEY")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///society.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
+
 ## Firestore
 firestore_db = firestore.Client()
 
-
-# SQL Models
+## SQL Models
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
@@ -222,6 +222,24 @@ def logout():
     return redirect(url_for("home"))
 
 # Event routes
+@app.route("/api/events")
+def api_events():
+    events = Event.query.order_by(Event.start_time.asc()).all()
+
+    return {
+        "events": [
+            {
+                "id": event.id,
+                "title": event.title,
+                "description": event.description,
+                "location": event.location,
+                "start_time": event.start_time.isoformat(),
+                "end_time": event.end_time.isoformat()
+            }
+            for event in events
+        ]
+    }
+
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
