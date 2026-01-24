@@ -3,6 +3,9 @@ body {
     font-family: Arial, sans-serif;
     margin: 20px;
 }
+h2 {
+    text-align: center;
+}
 
 // Navigation styling
 nav {
@@ -36,4 +39,10 @@ nav a {
 .nav__menu a:hover {
     color: #00344f;
     background-color: #00e1c0;
+}
+
+// Register styling
+form {
+    text-align: center;
+    display: block;
 }
