@@ -6,16 +6,19 @@
 </head>
 <body>
     <nav>
-        <a href="{{ url_for('home') }}">Home</a>
-        <a href="{{ url_for('list_events') }}">Events</a>
-
-        {% if session.get("user") %} <!-- Allowing logged-in users to view RSVP -->
-        <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
-        <a href="{{ url_for('logout') }}">Logout</a>
-        {% else %} <!-- Shows register for non-logged-in users -->
-        <a href="{{ url_for('register') }}">Register</a>
-        <a href="{{ url_for('login') }}">Login</a>
-        {% endif %}
+        <div class="nav__logo">Page</div>
+        <div class="nav__menu">   
+            <a href="{{ url_for('home') }}">Home</a>
+            <a href="{{ url_for('list_events') }}">Events</a>
+    
+            {% if session.get("user") %} <!-- Logged-in user view -->
+            <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+            {% else %} <!-- Non-logged-in user view -->
+            <a href="{{ url_for('register') }}">Register</a>
+            <a href="{{ url_for('login') }}">Login</a>
+            {% endif %}
+        </div>
     </nav>
     <hr>
     {% block content %}{% endblock %}
