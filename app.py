@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import wraps
 from flask import abort
 from google.cloud import firestore
+from google.api_core.exceptions import PermissionDenied
 
 load_dotenv()
 
@@ -94,20 +95,25 @@ def admin_required(view_func):
 
 # For firestore DB
 def log_action(action, user=None, extra=None):
-    data = {
-        "action": action,
-        "timestamp": datetime.utcnow()
-    }
+    if firestore_db is None:
+        return
+
+    data = {"action": action, "timestamp": datetime.utcnow()}
 
     if user:
-        data["user_email"] = user.email
+        data["user"] = user.email
         data["user_id"] = user.id
         data["role"] = user.role
 
     if extra:
         data.update(extra)
 
-    firestore_db.collection("activity_logs").add(data)
+    try:
+        firestore_db.collection("activity_logs").add(data)
+    except PermissionDenied as e:
+        print("Firestore permission denied - logging skipped:", e)
+    except Exception as e:
+        print("Firestore logging failed - skipped:", e)
 
 
 # Routes
@@ -204,7 +210,7 @@ def login():
         password = request.form["password"]
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password_hash, password):
-            session["user_email"] = user.email
+            session["user"] = user.email
             session["role"] = user.role
             log_action(
                 "LOGIN",
@@ -216,7 +222,7 @@ def login():
 
 @app.route("/logout")
 def logout():
-    session.pop("user_email", None)
+    session.pop("user", None)
     session.pop("role", None)
     return redirect(url_for("home"))
 
@@ -242,7 +248,7 @@ def api_events():
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
-    return render_template("event_list.html", events=events, user_email=session.get("user"), role=session.get("role"))
+    return render_template("event_list.html", events=events, user=session.get("user"), role=session.get("role"))
 
 @app.route("/events/<int:event_id>")
 def event_detail(event_id):
@@ -348,19 +354,6 @@ def my_rsvps():
         .all()
     )
     return render_template("my_rsvps.html", rows=rows, user_email=session.get("user"), role=session.get("role"))
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":

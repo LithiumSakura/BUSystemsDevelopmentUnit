@@ -12,14 +12,6 @@
             <a href="{{ url_for('list_events') }}">Events</a>
 
             {% if session.get("user") %} <!-- Checking which user type is logged-in -->
-                {% if session.get("role") == "member" %}
-                    <span style="margin-left:10px;">Member</span>
-                {% elif session.get("role") == "committee" %}
-                    <span style="margin-left:10px; font-weight:bold;">Committee</span>
-                {% elif session.get("role") == "admin" %}
-                    <span style="margin-left:10px; font-weight:bold;">Admin</span>
-                {% endif %}
-
                 <!-- Committee & Admin view -->
                 {% if session.get("role") in ["committee", "admin"] %}
                     <a href="{{ url_for('admin_event_new') }}">Create Event</a>
@@ -40,9 +32,14 @@
             {% endif %}
         </div>
     </nav>
-
-
     <hr>
+    {% if session.get("role") == "member" %}
+        <span style="margin-left:10px;">Member</span>
+    {% elif session.get("role") == "committee" %}
+        <span style="margin-left:10px; font-weight:bold;">Committee</span>
+    {% elif session.get("role") == "admin" %}
+        <span style="margin-left:10px; font-weight:bold;">Admin</span>
+    {% endif %}
     {% block content %}{% endblock %}
 </body>
 </html>
