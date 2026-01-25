@@ -49,6 +49,7 @@ class Event(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    image_url = db.Column(db.String(500), nullable=True)
 
 class RSVP(db.Model):
     __tablename__ = "rsvps"
@@ -248,7 +249,7 @@ def api_events():
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
-    return render_template("event_list.html", events=events, user=session.get("user"), role=session.get("role"))
+    return render_template("events_list.html", events=events)
 
 @app.route("/events/<int:event_id>")
 def event_detail(event_id):
