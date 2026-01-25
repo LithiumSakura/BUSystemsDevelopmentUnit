@@ -9,6 +9,8 @@
             — {{ user.committee_position }}
         {% elif user.role == "admin" %}
             — Admin
+        {% else %}
+            - Member
         {% endif %}
     </p>
 {% else %}

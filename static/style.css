@@ -33,6 +33,7 @@ nav a {
     text-decoration: none;
     color: #fff;
     display: flex;
+    text-align: right;
 }
 .nav__menu a:hover {
     color: #00344f;
