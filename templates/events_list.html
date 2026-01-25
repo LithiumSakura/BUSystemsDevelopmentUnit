@@ -8,7 +8,7 @@
     <a class="event-card" href="{{ url_for('event_detail', event_id=e.id) }}">
       <div class="event-thumb">
         <img
-          src="{{ e.image_url if e.image_url else url_for('static', filename='img/event-placeholder.jpg') }}"
+          src="{{ e.image_url if e.image_url else url_for('static', filename='img/event-placeholder.png') }}"
           alt="{{ e.title }}"
           loading="lazy"
         >
