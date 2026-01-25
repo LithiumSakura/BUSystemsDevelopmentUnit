@@ -9,6 +9,8 @@ from flask import abort
 from google.cloud import firestore
 from google.api_core.exceptions import PermissionDenied
 import requests
+from sqlalchemy.exc import OperationalError
+
 
 load_dotenv()
 
@@ -19,8 +21,14 @@ cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 # Databases setup
 
 ## SQLAlchemy
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///society.db")
+database_url = os.getenv("DATABASE_URL")
+
+if not database_url:
+    database_url = "sqlite:///society.db"
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 db = SQLAlchemy(app)
 
 ## Firestore
@@ -57,7 +65,7 @@ class RSVP(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
-# Creating roles
+# Functions
 def get_current_user():
     email = session.get("user")
     if not email:
@@ -91,6 +99,9 @@ def admin_required(view_func):
             abort(403)
         return view_func(*args, **kwargs)
     return wrapped
+
+def parse_dt_local(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
 
 # For firestore DB
 def log_action(action, user=None, extra=None):
@@ -193,7 +204,10 @@ def admin_logs():
 # General user routes
 @app.route("/")
 def home():
-    user = get_current_user()
+    try:
+        user = get_current_user()
+    except OperationalError:
+        user = None
     return render_template("home.html", user=user)
 
 @app.route("/register", methods=["GET", "POST"])
@@ -321,8 +335,8 @@ def admin_event_new():
         description = request.form.get("description", "").strip()
         location = request.form.get("location", "").strip()
         # Self-reminder, format: "YYYY-MM-DDTHH:MM"
-        start_time = datetime.fromisoformat(request.form["start_time"])
-        end_time = datetime.fromisoformat(request.form["end_time"])
+        start_time = parse_dt_local(request.form["start_time"])
+        end_time = parse_dt_local(request.form["end_time"])
         creator = get_current_user()
         event = Event(
             title=title,
