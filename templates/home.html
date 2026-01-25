@@ -2,7 +2,7 @@
 {% block content %}
 <h1>Society Management System</h1>
 
-{% if user %}
+{% if session.get("user") %}
     <p>
         Hello {{ user.first_name }}
         {% if user.role == "committee" and user.committee_position %}

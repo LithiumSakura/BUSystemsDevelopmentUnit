@@ -6,40 +6,42 @@
 </head>
 <body>
     <nav>
-        <div class="nav_logo">Page</div>
+        <div class="nav_logo">
+        {% if session.get("user") %}
+            {% if session.get("role") == "member" %}
+                <span style="margin-left:10px;">Member</span>
+            {% elif session.get("role") == "committee" %}
+                <span style="margin-left:10px; font-weight:bold;">Committee</span>
+            {% elif session.get("role") == "admin" %}
+                <span style="margin-left:10px; font-weight:bold;">Admin</span>
+            {% endif %}
+        </div>
         <div class="nav_menu">
             <a href="{{ url_for('home') }}">Home</a>
             <a href="{{ url_for('list_events') }}">Events</a>
 
-            {% if session.get("user") %} <!-- Checking which user type is logged-in -->
-                <!-- Committee & Admin view -->
-                {% if session.get("role") in ["committee", "admin"] %}
-                    <a href="{{ url_for('admin_event_new') }}">Create Event</a>
-                {% endif %}
+            <!-- Committee/Admin view -->
+            {% if session.get("role") in ["committee", "admin"] %}
+                <a href="{{ url_for('admin_event_new') }}">Create Event</a>
+            {% endif %}
 
-                <!-- Admin view -->
-                {% if session.get("role") == "admin" %}
-                    <a href="{{ url_for('admin_users') }}">Manage Users</a>
-                    <a href="{{ url_for('admin_logs') }}">Logs</a>
-                {% endif %}
+            <!-- Admin only view -->
+            {% if session.get("role") == "admin" %}
+                <a href="{{ url_for('admin_users') }}">Manage Users</a>
+                {# Only keep Logs if you actually have an admin_logs route #}
+                <a href="{{ url_for('admin_logs') }}">Logs</a>
+            {% endif %}
 
-                <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
-                <a href="{{ url_for('logout') }}">Logout</a>
+            <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
 
-            {% else %} <!-- Non-logged-in users -->
-                <a href="{{ url_for('register') }}">Register</a>
-                <a href="{{ url_for('login') }}">Login</a>
+            {% else %}
+            <a href="{{ url_for('register') }}">Register</a>
+            <a href="{{ url_for('login') }}">Login</a>
             {% endif %}
         </div>
     </nav>
     <hr>
-    {% if session.get("role") == "member" %}
-        <span style="margin-left:10px;">Member</span>
-    {% elif session.get("role") == "committee" %}
-        <span style="margin-left:10px; font-weight:bold;">Committee</span>
-    {% elif session.get("role") == "admin" %}
-        <span style="margin-left:10px; font-weight:bold;">Admin</span>
-    {% endif %}
     {% block content %}{% endblock %}
 </body>
 </html>
