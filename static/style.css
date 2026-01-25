@@ -1,3 +1,4 @@
+/* General Styling */
 body {
     font-family: Arial, sans-serif;
     margin: 20px;
@@ -6,40 +7,44 @@ h2 {
     text-align: center;
 }
 
+/* Navigation (header) Styling */
 nav {
     height: 3.2rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
     background-color: #00344f;
     color: #fff;
 }
-nav a {
-    text-align: right;
-    margin-right: 10px;
-    text-decoration: none;
-    color: white;
-    border: 0.2rem;
-    border-radius: rem;
-}
 .nav__logo {
     font-size: 1.5rem;
+    font-weight: bold;
     margin: auto 1rem;
 }
 .nav__menu {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    text-decoration: none;
-    color: #fff;
     display: flex;
-    text-align: right;
+    gap: 16px;
+    margin-left: auto;
+    align-items: center;
 }
-.nav__menu a:hover {
+.nav__menu a, .nav__menu a:visited {
+    color: #fff;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+.nav__menu a:hover, .nav__menu a:focus {
     color: #00344f;
     background-color: #00e1c0;
+    text-decoration: none;
 }
 
+.nav__menu a:active {
+    opacity: 0.85;
+}
+
+/* Form Styling (for login & register) */
 form {
     text-align: center;
     display: block;
