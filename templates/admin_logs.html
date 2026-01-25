@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Activity Logs</h2>
+
+<ul>
+{% for log in logs %}
+    {% set l = log.to_dict() %}
+    <li>
+        <b>{{ l.action }}</b>
+        — {{ l.user_email if l.user_email else "system" }}
+        — {{ l.timestamp }}
+    </li>
+{% endfor %}
+</ul>
+
+{% endblock %}

@@ -1,11 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Student Society Management System</h1>
+<h1>Society Management System</h1>
 
-{% if user_email %}
-<p>Logged in as {{ user_email }}</p>
+{% if session.get("user") %}
+    <p>
+        Hello {{ user.first_name }}
+        {% if user.role == "committee" and user.committee_position %}
+            — {{ user.committee_position }}
+        {% elif user.role == "admin" %}
+            — Admin
+        {% else %}
+            - Member
+        {% endif %}
+    </p>
 {% else %}
-<p>You are not logged in</p>
+    <p>You are not logged in</p>
 {% endif %}
 
 {% endblock %}
