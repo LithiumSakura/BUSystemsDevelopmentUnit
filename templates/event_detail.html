@@ -22,7 +22,7 @@
             <input
                 type="checkbox"
                 name="going"
-                {% if existing_rsvp and existing_rsvp.status = "going" %}
+                {% if existing_rsvp and existing_rsvp.status == "going" %}
                     checked
                 {% endif %}
             >

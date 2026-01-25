@@ -8,12 +8,13 @@ from functools import wraps
 from flask import abort
 from google.cloud import firestore
 from google.api_core.exceptions import PermissionDenied
+import requests
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
-
+cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
 # Databases setup
 
@@ -29,15 +30,12 @@ firestore_db = firestore.Client()
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
-
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-
     role = db.Column(db.String(20), default="member", nullable=False)
     committee_position = db.Column(db.String(50), nullable=True)
-
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 class Event(db.Model):
@@ -115,6 +113,22 @@ def log_action(action, user=None, extra=None):
         print("Firestore permission denied - logging skipped:", e)
     except Exception as e:
         print("Firestore logging failed - skipped:", e)
+
+# For cloud functions
+def call_rsvp_cloud_function(user, event, status):
+    if not cloud_function_url:
+        return
+
+    payload = {
+        "user_email": user.email,
+        "event_id": event.id,
+        "new_status": status
+    }
+
+    try:
+        requests.post(cloud_function_url, json=payload, timeout=3)
+    except Exception as e:
+        print("Cloud Function call failed:", e)
 
 
 # Routes
@@ -246,6 +260,38 @@ def api_events():
         ]
     }
 
+@app.route("/api/events/<int:event_id>/rsvp", methods=["POST"])
+@login_required
+def api_toggle_rsvp(event_id):
+    user = get_current_user()
+    event = Event.query.get_or_404(event_id)
+
+    body = request.get_json(silent=True) or {}
+    is_going = bool(body.get("going", False))
+
+    rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
+
+    if rsvp:
+        rsvp.status = "going" if is_going else "cancelled"
+    else:
+        rsvp = RSVP(
+            user_id=user.id,
+            event_id=event.id,
+            status="going" if is_going else "cancelled"
+        )
+        db.session.add(rsvp)
+
+    db.session.commit()
+
+    # Call your cloud function after the DB update
+    call_rsvp_cloud_function(user, event, rsvp.status)
+
+    return {
+        "message": "RSVP updated",
+        "event_id": event.id,
+        "status": rsvp.status
+    }, 200
+
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
@@ -332,6 +378,7 @@ def toggle_rsvp(event_id):
         )
         db.session.add(rsvp)
     db.session.commit()
+    call_rsvp_cloud_function(user, event, rsvp.status)
     log_action(
         "RSVP_UPDATED",
         user=user,
