@@ -1,0 +1,6 @@
+runtime: python311
+
+entrypoint: gunicorn -b :$PORT app:app
+
+env_variables:
+  SECRET_KEY: ${SECRET_KEY}
