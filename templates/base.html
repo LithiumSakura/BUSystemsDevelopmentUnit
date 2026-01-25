@@ -7,37 +7,40 @@
 <body>
     <nav>
         <div class="nav__logo">
-        {% if session.get("user") %}
-            {% if session.get("role") == "member" %}
-                <span style="margin-left:10px;">Member</span>
-            {% elif session.get("role") == "committee" %}
-                <span style="margin-left:10px; font-weight:bold;">Committee</span>
-            {% elif session.get("role") == "admin" %}
-                <span style="margin-left:10px; font-weight:bold;">Admin</span>
+            {% if session.get("user") %}
+                {% if session.get("role") == "member" %}
+                    <span class="role role-member">Member</span>
+                {% elif session.get("role") == "committee" %}
+                    <span class="role role-committee">Committee</span>
+                {% elif session.get("role") == "admin" %}
+                    <span class="role role-admin">Admin</span>
+                {% endif %}
+            {% else %}
+                <span>Society Manager</span>
             {% endif %}
         </div>
         <div class="nav__menu">
             <a href="{{ url_for('home') }}">Home</a>
             <a href="{{ url_for('list_events') }}">Events</a>
+            
+            {% if session.get("user") %}
+                <!-- Committee/Admin view -->
+                {% if session.get("role") in ["committee", "admin"] %}
+                    <a href="{{ url_for('admin_event_new') }}">Create Event</a>
+                {% endif %}
 
-            <!-- Committee/Admin view -->
-            {% if session.get("role") in ["committee", "admin"] %}
-                <a href="{{ url_for('admin_event_new') }}">Create Event</a>
-            {% endif %}
+                <!-- Admin only view -->
+                {% if session.get("role") == "admin" %}
+                    <a href="{{ url_for('admin_users') }}">Manage Users</a>
+                    <a href="{{ url_for('admin_logs') }}">Logs</a>
+                {% endif %}
 
-            <!-- Admin only view -->
-            {% if session.get("role") == "admin" %}
-                <a href="{{ url_for('admin_users') }}">Manage Users</a>
-                {# Only keep Logs if you actually have an admin_logs route #}
-                <a href="{{ url_for('admin_logs') }}">Logs</a>
-            {% endif %}
-
-            <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
-            <a href="{{ url_for('logout') }}">Logout</a>
+                <a href="{{ url_for('my_rsvps') }}">My RSVPs</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
 
             {% else %}
-            <a href="{{ url_for('register') }}">Register</a>
-            <a href="{{ url_for('login') }}">Login</a>
+                <a href="{{ url_for('register') }}">Register</a>
+                <a href="{{ url_for('login') }}">Login</a>
             {% endif %}
         </div>
     </nav>
