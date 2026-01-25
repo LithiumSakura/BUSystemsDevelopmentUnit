@@ -118,7 +118,7 @@ def init_db():
     db.create_all()
     return "DB initialised! You can now register/login."
 
-@app.route("/dev/make-me-admin")
+@app.route("/make-me-admin")
 @login_required
 def make_me_admin():
     user = get_current_user()
@@ -169,7 +169,6 @@ def admin_logs():
     return render_template("admin_logs.html", logs=logs)
 
 
-
 # General user routes
 @app.route("/")
 def home():
@@ -205,7 +204,7 @@ def login():
         password = request.form["password"]
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password_hash, password):
-            session["user"] = user.email
+            session["user_email"] = user.email
             session["role"] = user.role
             log_action(
                 "LOGIN",
@@ -217,7 +216,7 @@ def login():
 
 @app.route("/logout")
 def logout():
-    session.pop("user", None)
+    session.pop("user_email", None)
     session.pop("role", None)
     return redirect(url_for("home"))
 
