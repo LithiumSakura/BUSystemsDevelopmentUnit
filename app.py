@@ -1,25 +1,36 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import os
+import uuid
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from functools import wraps
 from flask import abort
 from google.cloud import firestore
 from google.api_core.exceptions import PermissionDenied
+import requests
+from sqlalchemy.exc import OperationalError
+
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
-
+cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
 # Databases setup
 
 ## SQLAlchemy
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///society.db")
+database_url = os.getenv("DATABASE_URL")
+
+if not database_url:
+    database_url = "sqlite:///society.db"
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 db = SQLAlchemy(app)
 
 ## Firestore
@@ -29,15 +40,12 @@ firestore_db = firestore.Client()
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
-
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-
     role = db.Column(db.String(20), default="member", nullable=False)
     committee_position = db.Column(db.String(50), nullable=True)
-
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 class Event(db.Model):
@@ -58,8 +66,17 @@ class RSVP(db.Model):
     status = db.Column(db.String(20), default="going", nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
-# Creating roles
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# Functions
 def get_current_user():
     email = session.get("user")
     if not email:
@@ -94,6 +111,9 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
     return wrapped
 
+def parse_dt_local(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+
 # For firestore DB
 def log_action(action, user=None, extra=None):
     if firestore_db is None:
@@ -115,6 +135,22 @@ def log_action(action, user=None, extra=None):
         print("Firestore permission denied - logging skipped:", e)
     except Exception as e:
         print("Firestore logging failed - skipped:", e)
+
+# For cloud functions
+def call_rsvp_cloud_function(user, event, status):
+    if not cloud_function_url:
+        return
+
+    payload = {
+        "user_email": user.email,
+        "event_id": event.id,
+        "new_status": status
+    }
+
+    try:
+        requests.post(cloud_function_url, json=payload, timeout=3)
+    except Exception as e:
+        print("Cloud Function call failed:", e)
 
 
 # Routes
@@ -179,7 +215,10 @@ def admin_logs():
 # General user routes
 @app.route("/")
 def home():
-    user = get_current_user()
+    try:
+        user = get_current_user()
+    except OperationalError:
+        user = None
     return render_template("home.html", user=user)
 
 @app.route("/register", methods=["GET", "POST"])
@@ -246,6 +285,38 @@ def api_events():
         ]
     }
 
+@app.route("/api/events/<int:event_id>/rsvp", methods=["POST"])
+@login_required
+def api_toggle_rsvp(event_id):
+    user = get_current_user()
+    event = Event.query.get_or_404(event_id)
+
+    body = request.get_json(silent=True) or {}
+    is_going = bool(body.get("going", False))
+
+    rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
+
+    if rsvp:
+        rsvp.status = "going" if is_going else "cancelled"
+    else:
+        rsvp = RSVP(
+            user_id=user.id,
+            event_id=event.id,
+            status="going" if is_going else "cancelled"
+        )
+        db.session.add(rsvp)
+
+    db.session.commit()
+
+    # Call your cloud function after the DB update
+    call_rsvp_cloud_function(user, event, rsvp.status)
+
+    return {
+        "message": "RSVP updated",
+        "event_id": event.id,
+        "status": rsvp.status
+    }, 200
+
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
@@ -274,17 +345,29 @@ def admin_event_new():
         title = request.form["title"].strip()
         description = request.form.get("description", "").strip()
         location = request.form.get("location", "").strip()
-        # Self-reminder, format: "YYYY-MM-DDTHH:MM"
-        start_time = datetime.fromisoformat(request.form["start_time"])
-        end_time = datetime.fromisoformat(request.form["end_time"])
+        start_time = parse_dt_local(request.form["start_time"])
+        end_time = parse_dt_local(request.form["end_time"])
         creator = get_current_user()
+        image_file = request.files.get("image")
+        image_url = None
+
+        if image_file and image_file.filename:
+            if not allowed_file(image_file.filename):
+                return "Invalid image type. Use PNG/JPG/WebP.", 400
+            ext = image_file.filename.rsplit(".", 1)[1].lower()
+            filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+            save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            image_file.save(save_path)
+            image_url = url_for("static", filename=f"uploads/{filename}")
+
         event = Event(
             title=title,
             description=description,
             location=location,
             start_time=start_time,
             end_time=end_time,
-            created_by=creator.id
+            created_by=creator.id,
+            image_url=image_url
         )
         db.session.add(event)
         db.session.commit()
@@ -301,6 +384,18 @@ def admin_event_edit(event_id):
         event.location = request.form.get("location", "").strip()
         event.start_time = datetime.fromisoformat(request.form["start_time"])
         event.end_time = datetime.fromisoformat(request.form["end_time"])
+
+        image_file = request.files.get("image")
+        if image_file and image_file.filename:
+            if not allowed_file(image_file.filename):
+                return "Invalid image type. Use PNG/JPG/WebP.", 400
+
+            ext = image_file.filename.rsplit(".", 1)[1].lower()
+            filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+            save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            image_file.save(save_path)
+            event.image_url = url_for("static", filename=f"uploads/{filename}")
+
         db.session.commit()
         return redirect(url_for("event_detail", event_id=event.id))
     return render_template("admin_event_form.html", mode="edit", event=event)
@@ -320,7 +415,10 @@ def admin_event_delete(event_id):
 def toggle_rsvp(event_id):
     user = get_current_user()
     event = Event.query.get_or_404(event_id)
-    is_going = request.form.get("going") == "on"
+
+    action = request.form.get("action")
+    is_going = (action == "going")
+
     rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
     if rsvp:
         rsvp.status = "going" if is_going else "cancelled"
@@ -331,7 +429,9 @@ def toggle_rsvp(event_id):
             status="going" if is_going else "cancelled"
         )
         db.session.add(rsvp)
+        
     db.session.commit()
+    call_rsvp_cloud_function(user, event, rsvp.status)
     log_action(
         "RSVP_UPDATED",
         user=user,
