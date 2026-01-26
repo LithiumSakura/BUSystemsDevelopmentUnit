@@ -3,7 +3,6 @@
 # -----------------------------------------------------------------------------------
 
 import os
-import uuid
 from datetime import datetime
 from functools import wraps
 
@@ -13,9 +12,11 @@ from flask import Flask, render_template, request, redirect, url_for, session, a
 from flask_sqlalchemy import SQLAlchemy
 from google.api_core.exceptions import PermissionDenied
 from google.cloud import firestore
+from google.cloud import storage
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import and_
 from urllib.parse import urlparse
+from uuid import uuid4
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -97,12 +98,6 @@ class RSVP(db.Model):
 # Functions (helpers, authentication, template contexts)
 # -----------------------------------------------------------------------------------
 
-def allowed_file(filename: str) -> bool:
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def parse_dt_local(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
-
 def get_current_user():
     email = session.get("user")
     if not email:
@@ -155,10 +150,32 @@ def safe_referrer(default):
     ref = request.referrer
     if not ref:
         return default
-    # only allow same-host referrers
     if urlparse(ref).netloc and urlparse(ref).netloc != request.host:
         return default
     return ref
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def parse_dt_local(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+
+def upload_image_to_gcs(file_storage):
+    bucket_name = os.getenv("BUCKET_NAME")
+    if not bucket_name or not file_storage:
+        return None
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+
+    ext = os.path.splitext(file_storage.filename)[1].lower() or ".jpg"
+    blob_name = f"event-images/{uuid4().hex}{ext}"
+    blob = bucket.blob(blob_name)
+
+    blob.upload_from_file(file_storage.stream, content_type=file_storage.mimetype)
+    blob.make_public()
+
+    return blob.public_url
 
 
 # -----------------------------------------------------------------------------------
@@ -419,7 +436,7 @@ def admin_event_new():
         end_time = parse_dt_local(request.form["end_time"])
         creator = get_current_user()
         image_file = request.files.get("image")
-        image_url = upload_event_image(image_file)
+        image_url = upload_image_to_gcs(image_file) if image_file and image_file.filename else None
 
         event = Event(
             title=title,
@@ -451,7 +468,7 @@ def admin_event_edit(event_id):
 
         image_file = request.files.get("image")
         if image_file and image_file.filename:
-            event.image_url = upload_event_image(image_file)
+            event.image_url = upload_image_to_gcs(image_file)
 
         db.session.commit()
 
