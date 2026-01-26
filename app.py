@@ -3,6 +3,7 @@
 # -----------------------------------------------------------------------------------
 
 import os
+import uuid
 from datetime import datetime
 from functools import wraps
 
@@ -61,7 +62,7 @@ firestore_db = firestore.Client()
 
 
 # -----------------------------------------------------------------------------------
-# Models
+# SQL Models
 # -----------------------------------------------------------------------------------
 
 class User(db.Model):
@@ -160,22 +161,41 @@ def allowed_file(filename: str) -> bool:
 def parse_dt_local(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%dT%H:%M")
 
-def upload_image_to_gcs(file_storage):
-    bucket_name = os.getenv("BUCKET_NAME")
-    if not bucket_name or not file_storage:
+def upload_event_image(image_file):
+    if not image_file or not image_file.filename:
         return None
 
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
+    if not allowed_file(image_file.filename):
+        abort(400, description="Invalid image type. Use PNG/JPG/WebP.")
 
-    ext = os.path.splitext(file_storage.filename)[1].lower() or ".jpg"
-    blob_name = f"event-images/{uuid4().hex}{ext}"
-    blob = bucket.blob(blob_name)
+    bucket_name = os.getenv("BUCKET_NAME")
 
-    blob.upload_from_file(file_storage.stream, content_type=file_storage.mimetype)
-    blob.make_public()
+    if bucket_name:
+        if storage is None:
+            abort(500, description="google-cloud-storage not installed but BUCKET_NAME is set.")
 
-    return blob.public_url
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+
+        ext = image_file.filename.rsplit(".", 1)[1].lower()
+        blob_name = f"event-images/{uuid.uuid4().hex}.{ext}"
+
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(
+            image_file.stream,
+            content_type=image_file.mimetype,
+            rewind=True,
+        )
+
+        return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+
+    # For local dev fallback
+    ext = image_file.filename.rsplit(".", 1)[1].lower()
+    filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    image_file.save(save_path)
+    return url_for("static", filename=f"uploads/{filename}")
+
 
 
 # -----------------------------------------------------------------------------------
