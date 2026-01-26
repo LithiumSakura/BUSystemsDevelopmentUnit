@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% block title %}Home{% endblock %}
 {% block content %}
-<h1>Society Management System</h1>
 
+<h1>Society Event Portal</h1>
 {% if session.get("user") %}
     <p>
         Hello {{ user.first_name }}
@@ -14,7 +15,24 @@
         {% endif %}
     </p>
 {% else %}
-    <p>You are not logged in</p>
+    <p>You are not logged in yet</p>
 {% endif %}
+<p>
+    {% if user.role == "admin" %}
+        Manage committee and events, track attendance, and stay up to date with what's happening in your society.
+    {% elif user.role == "committee" and user.committee_position %}
+        Manage events, track attendance, and stay up to date with what’s happening in your society.
+    {% else %}
+        Stay up to date with what’s happening in your society.
+    {% endif %}
+</p>
+
+<div style="display:flex; gap:12px; margin-top:14px;">
+    <a class="btn" href="{{ url_for('list_events') }}">View Events</a>
+
+    {% if not session.get("user") %}
+    <a class="btn btn--ghost" href="{{ url_for('register') }}">Join the Society</a>
+    {% endif %}
+</div>
 
 {% endblock %}

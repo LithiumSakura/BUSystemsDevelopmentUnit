@@ -4,6 +4,7 @@ entrypoint: gunicorn -b :$PORT app:app
 env_variables:
   SECRET_KEY: "d4499586af8a651eafcf2c08da141e58444c1b1976818529560da4af8f7fba4e"
   DATABASE_URL: "postgresql+psycopg2://societyuser:MainFrameSocietyRules@/society?host=/cloudsql/system-development-unit:europe-west2:society-db"
+  BUCKET_NAME: "system-development-unit-society-images-lisam-2026"
 
 beta_settings:
   cloud_sql_instances: "system-development-unit:europe-west2:society-db"
