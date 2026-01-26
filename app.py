@@ -216,19 +216,18 @@ def upload_event_image(image_file):
 
     bucket_name = os.getenv("BUCKET_NAME")
 
-    if bucket_name:
-        if storage is None:
-            abort(500, description="google-cloud-storage not installed but BUCKET_NAME is set.")
-        
+    if bucket_name:        
         client = storage.Client()
         bucket = client.bucket(bucket_name)
+
         ext = image_file.filename.rsplit(".", 1)[1].lower()
         blob_name = f"event-images/{uuid.uuid4().hex}.{ext}"
         blob = bucket.blob(blob_name)
-        blob.upload_from_file(image_file.stream, content_type=image_file.mimetype)
-        blob.make_public()
-        return blob.public_url
 
+        blob.upload_from_file(image_file.stream, content_type=image_file.mimetype)
+        return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+
+    # Fallback for local development
     ext = image_file.filename.rsplit(".", 1)[1].lower()
     filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
     save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
