@@ -14,6 +14,8 @@ from flask_sqlalchemy import SQLAlchemy
 from google.api_core.exceptions import PermissionDenied
 from google.cloud import firestore
 from sqlalchemy.exc import OperationalError
+from sqlalchemy import and_
+from urllib.parse import urlparse
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -148,6 +150,15 @@ def inject_user_context():
         "current_role": session.get("role"),
         "current_email": session.get("user"),
     }
+
+def safe_referrer(default):
+    ref = request.referrer
+    if not ref:
+        return default
+    # only allow same-host referrers
+    if urlparse(ref).netloc and urlparse(ref).netloc != request.host:
+        return default
+    return ref
 
 
 # -----------------------------------------------------------------------------------
@@ -348,7 +359,11 @@ def logout():
 
 @app.route("/")
 def home():
-    return render_template("home.html")
+    try:
+        user = get_current_user()
+    except OperationalError:
+        user = None
+    return render_template("home.html", user=user)
 
 
 # -----------------------------------------------------------------------------------
@@ -369,11 +384,10 @@ def event_detail(event_id):
     if user:
         existing_rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
 
-    return render_template(
-        "event_detail.html",
-        event=event,
-        existing_rsvp=existing_rsvp
-    )
+    back_url = safe_referrer(url_for("list_events"))
+
+    return render_template("event_detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url)
+
 
 @app.route("/my-rsvps")
 @login_required
