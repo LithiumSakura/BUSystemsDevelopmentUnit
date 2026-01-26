@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}{{event.title}}{% endblock %}
 {% block content %}
 
 <div class="container my-4">
@@ -76,8 +77,8 @@
                 </p>
             {% endif %}
                 <div class="mt-4">
-                    <a href="{{ url_for('list_events') }}" class="btn btn-primary">
-                        <i class="bi bi-arrow-left me-1"></i> Back to events
+                    <a href="{{ request.referrer or url_for('list_events') }}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-1"></i> Back
                     </a>
                 </div>
             </div>
