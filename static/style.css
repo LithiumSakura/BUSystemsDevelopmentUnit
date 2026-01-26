@@ -2,6 +2,8 @@
 body {
     font-family: Arial, sans-serif;
     margin: 20px;
+    background: #eaf4ff;
+
 }
 h2 {
     text-align: center;
@@ -135,4 +137,7 @@ form {
     height: 100%;
     object-fit: cover;
     display: block;
+}
+table {
+    
 }
