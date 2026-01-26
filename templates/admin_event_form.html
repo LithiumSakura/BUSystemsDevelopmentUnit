@@ -1,25 +1,140 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>{% if mode == "edit" %}Edit{% else %}Create{% endif %} Event</h2>
 
-<form method="post">
-       <label>Title</label><br>
-       <input name="title" required value="{{ event.title if event else '' }}"><br><br>
+<div class="container py-4">
+       <div class="d-flex align-items-center justify-content-between mb-3">
+              <div>
+                     <h2 class="fw-bold mb-0">
+                            <i class="bi bi-plus-square me-2"></i>
+                            {{ "Create Event" if mode == "create" else "Edit Event" }}
+                     </h2>
+                     <div class="text-muted">Fill out the details and optionally add an image.</div>
+              </div>
+       </div>
 
-       <label>Description</label><br>
-       <textarea name="description" rows="4">{{ event.description if event else '' }}</textarea><br><br>
+       <div class="row g-4">
+              <!-- FORM -->
+              <div class="col-lg-7">
+                     <div class="card shadow-sm border-0">
+                            <div class="card-body p-4">
+                                   <form method="POST" enctype="multipart/form-data">
+                                          <div class="mb-3">
+                                                 <label class="form-label fw-semibold">Title</label>
+                                                 <input
+                                                        type="text"
+                                                        class="form-control"
+                                                        name="title"
+                                                        value="{{ event.title if event else '' }}"
+                                                        placeholder="e.g. Language Exchange Night"
+                                                        required
+                                                 >
+                                          </div>
 
-       <label>Location</label><br>
-       <input name="location" value="{{ event.location if event else '' }}"><br><br>
+                                          <div class="mb-3">
+                                                 <label class="form-label fw-semibold">Description</label>
+                                                 <textarea
+                                                        class="form-control"
+                                                        name="description"
+                                                        rows="4"
+                                                        placeholder="What’s happening at this event?"
+                                                 >{{ event.description if event else '' }}</textarea>
+                                          </div>
 
-       <label>Start time</label><br>
-       <input type="datetime-local" name="start_time" required
-              value="{% if event %}{{ event.start_time.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"><br><br>
+                                          <div class="mb-3">
+                                                 <label class="form-label fw-semibold">Location</label>
+                                                 <div class="input-group">
+                                                        <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                                                        <input
+                                                               type="text"
+                                                               class="form-control"
+                                                               name="location"
+                                                               value="{{ event.location if event else '' }}"
+                                                               placeholder="e.g. Student Union, Room FG06"
+                                                        >
+                                                 </div>
+                                          </div>
 
-       <label>End time</label><br>
-       <input type="datetime-local" name="end_time" required
-              value="{% if event %}{{ event.end_time.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"><br><br>
+                                          <div class="row g-3">
+                                                 <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">Start time</label>
+                                                        <div class="input-group">
+                                                               <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                                               <input
+                                                                      type="datetime-local"
+                                                                      class="form-control"
+                                                                      name="start_time"
+                                                                      value="{% if event %}{{ event.start_time.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                                                                      required
+                                                               >
+                                                        </div>
+                                                 </div>
+                                                 <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">End time</label>
+                                                        <div class="input-group">
+                                                               <span class="input-group-text"><i class="bi bi-clock-history"></i></span>
+                                                               <input
+                                                                      type="datetime-local"
+                                                                      class="form-control"
+                                                                      name="end_time"
+                                                                      value="{% if event %}{{ event.end_time.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                                                                      required
+                                                               >
+                                                        </div>
+                                                 </div>
+                                          </div>
+                                          <hr class="my-4">
 
-       <button type="submit">Save</button>
-</form>
+                                          <div class="mb-3">
+                                                 <label class="form-label fw-semibold">Event image (optional)</label>
+                                                 <input
+                                                        type="file"
+                                                        class="form-control"
+                                                        name="image"
+                                                        accept="image/png, image/jpeg, image/webp"
+                                                        onchange="previewImage(event)"
+                                                 >
+                                                 <div class="form-text">
+                                                        JPG/PNG/WebP. If you don’t upload one, a placeholder will be used.
+                                                 </div>
+                                          </div>
+
+                                          <div class="d-flex gap-2">
+                                                 <button type="submit" class="btn btn-success">
+                                                        <i class="bi bi-check2-circle me-1"></i> Save
+                                                 </button>
+                                                 <a href="{{ url_for('list_events') }}" class="btn btn-outline-secondary">Cancel</a>
+                                          </div>
+                                   </form>
+                            </div>
+                     </div>
+              </div>
+              <!-- PREVIEW -->
+              <div class="col-lg-5">
+                     <div class="card shadow-sm border-0">
+                            <div class="card-body p-4">
+                                   <div class="fw-semibold mb-2">
+                                          <i class="bi bi-image me-1"></i> Preview
+                                   </div>
+                                   {% set current_img = (event.image_url if event and event.image_url else url_for('static', filename='img/event_placeholder.png')) %}
+                                   <div class="ratio ratio-1x1 rounded overflow-hidden bg-light">
+                                          <img id="preview" src="{{ current_img }}" class="w-100 h-100 object-fit-cover" alt="Event image preview">
+                                   </div>
+                                   <div class="mt-3 small text-muted">
+                                          Tip: pick a square-ish photo for best results.
+                                   </div>
+                            </div>
+                     </div>
+              </div>
+       </div>
+</div>
+
+<script>
+       function previewImage(e) {
+              const file = e.target.files && e.target.files[0];
+              if (!file) return;
+              const url = URL.createObjectURL(file);
+              document.getElementById('preview').src = url;
+       }
+</script>
+
 {% endblock %}

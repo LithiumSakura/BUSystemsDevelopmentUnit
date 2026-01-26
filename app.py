@@ -1,7 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import os
+import uuid
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from functools import wraps
@@ -63,6 +65,15 @@ class RSVP(db.Model):
     event_id = db.Column(db.Integer, db.ForeignKey("events.id"), primary_key=True)
     status = db.Column(db.String(20), default="going", nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # Functions
@@ -334,17 +345,29 @@ def admin_event_new():
         title = request.form["title"].strip()
         description = request.form.get("description", "").strip()
         location = request.form.get("location", "").strip()
-        # Self-reminder, format: "YYYY-MM-DDTHH:MM"
         start_time = parse_dt_local(request.form["start_time"])
         end_time = parse_dt_local(request.form["end_time"])
         creator = get_current_user()
+        image_file = request.files.get("image")
+        image_url = None
+
+        if image_file and image_file.filename:
+            if not allowed_file(image_file.filename):
+                return "Invalid image type. Use PNG/JPG/WebP.", 400
+            ext = image_file.filename.rsplit(".", 1)[1].lower()
+            filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+            save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            image_file.save(save_path)
+            image_url = url_for("static", filename=f"uploads/{filename}")
+
         event = Event(
             title=title,
             description=description,
             location=location,
             start_time=start_time,
             end_time=end_time,
-            created_by=creator.id
+            created_by=creator.id,
+            image_url=image_url
         )
         db.session.add(event)
         db.session.commit()
@@ -361,6 +384,18 @@ def admin_event_edit(event_id):
         event.location = request.form.get("location", "").strip()
         event.start_time = datetime.fromisoformat(request.form["start_time"])
         event.end_time = datetime.fromisoformat(request.form["end_time"])
+
+        image_file = request.files.get("image")
+        if image_file and image_file.filename:
+            if not allowed_file(image_file.filename):
+                return "Invalid image type. Use PNG/JPG/WebP.", 400
+
+            ext = image_file.filename.rsplit(".", 1)[1].lower()
+            filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+            save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            image_file.save(save_path)
+            event.image_url = url_for("static", filename=f"uploads/{filename}")
+
         db.session.commit()
         return redirect(url_for("event_detail", event_id=event.id))
     return render_template("admin_event_form.html", mode="edit", event=event)
@@ -380,7 +415,10 @@ def admin_event_delete(event_id):
 def toggle_rsvp(event_id):
     user = get_current_user()
     event = Event.query.get_or_404(event_id)
-    is_going = request.form.get("going") == "on"
+
+    action = request.form.get("action")
+    is_going = (action == "going")
+
     rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
     if rsvp:
         rsvp.status = "going" if is_going else "cancelled"
@@ -391,6 +429,7 @@ def toggle_rsvp(event_id):
             status="going" if is_going else "cancelled"
         )
         db.session.add(rsvp)
+        
     db.session.commit()
     call_rsvp_cloud_function(user, event, rsvp.status)
     log_action(
