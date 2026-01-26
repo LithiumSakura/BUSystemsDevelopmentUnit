@@ -216,7 +216,7 @@ def upload_event_image(image_file):
 
     bucket_name = os.getenv("BUCKET_NAME")
 
-    if bucket_name:        
+    if bucket_name:
         client = storage.Client()
         bucket = client.bucket(bucket_name)
 
