@@ -536,7 +536,7 @@ def event_detail(event_id):
         except Exception:
             feedback_items = []
 
-    return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url, feedback_items=feedback_items
+    return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url, feedback_items=feedback_items)
 
 @app.post("/events/<int:event_id>/feedback")
 @login_required
