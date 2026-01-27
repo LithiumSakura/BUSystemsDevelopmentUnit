@@ -539,6 +539,7 @@ def event_detail(event_id):
     return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url, feedback_items=feedback_items)
 
 @app.post("/events/<int:event_id>/feedback")
+@csrf.exempt
 @login_required
 def submit_feedback(event_id):
     if not firestore_db:
@@ -593,6 +594,7 @@ def my_rsvps():
 # -----------------------------------------------------------------------------------
 
 @app.route("/admin/events/new", methods=["GET", "POST"])
+@csrf.exempt
 @committee_or_admin_required
 def admin_event_new():
     if request.method == "POST":
@@ -627,6 +629,7 @@ def admin_event_new():
     return render_template("events/form.html", mode="create")
 
 @app.route("/admin/events/<int:event_id>/edit", methods=["GET", "POST"])
+@csrf.exempt
 @committee_or_admin_required
 def admin_event_edit(event_id):
     event = Event.query.get_or_404(event_id)
@@ -649,6 +652,7 @@ def admin_event_edit(event_id):
     return render_template("events/form.html", mode="edit", event=event)
 
 @app.route("/admin/events/<int:event_id>/delete", methods=["POST"])
+@csrf.exempt
 @committee_or_admin_required
 def admin_event_delete(event_id):
     event = Event.query.get_or_404(event_id)
@@ -666,6 +670,7 @@ def admin_event_delete(event_id):
 # -----------------------------------------------------------------------------------
 
 @app.route("/events/<int:event_id>/rsvp", methods=["POST"])
+@csrf.exempt
 @login_required
 def toggle_rsvp(event_id):
     user = get_current_user()
