@@ -287,7 +287,7 @@ def admin_users():
         )
 
         return redirect(url_for("admin_users"))
-    return render_template("admin_users.html", users=users)
+    return render_template("admin/users.html", users=users)
 
 @app.route("/admin/logs")
 @admin_required
@@ -299,7 +299,7 @@ def admin_logs():
         .stream()
     )
 
-    return render_template("admin_logs.html", logs=logs)
+    return render_template("admin/logs.html", logs=logs)
 
 
 # -----------------------------------------------------------------------------------
@@ -329,7 +329,7 @@ def register():
         db.session.commit()
 
         return redirect(url_for("login"))
-    return render_template("register.html")
+    return render_template("auth/register.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -348,7 +348,7 @@ def login():
 
             return redirect(url_for("home"))
         return "Invalid credentials"
-    return render_template("login.html")
+    return render_template("auth/login.html")
 
 @app.route("/logout")
 def logout():
@@ -359,11 +359,66 @@ def logout():
 
 @app.route("/")
 def home():
-    try:
-        user = get_current_user()
-    except OperationalError:
-        user = None
-    return render_template("home.html", user=user)
+    user = get_current_user()
+
+    upcoming_events = (
+        Event.query
+        .filter(Event.start_time >= datetime.utcnow())
+        .order_by(Event.start_time.asc())
+        .limit(6)
+        .all()
+    )
+
+    recent_logs = []
+    committee_rows = []
+    my_rsvps_preview = []
+
+    # Showing recent logs for admin
+    if user and user.role == "admin":
+        try:
+            recent_logs = (
+                firestore_db.collection("activity_logs")
+                .order_by("timestamp", direction=firestore.Query.DESCENDING)
+                .limit(5)
+                .stream()
+            )
+            recent_logs = [log.to_dict() for log in recent_logs]
+        except Exception:
+            recent_logs = []
+
+    # Showing RSVP counts per upcoming events for committee
+    if user and user.role in ["committee", "admin"]:
+        committee_rows = (
+            db.session.query(
+                Event,
+                db.func.count(RSVP.user_id).label("going_count")
+            )
+            .outerjoin(RSVP, and_(RSVP.event_id == Event.id, RSVP.status == "going"))
+            .filter(Event.start_time >= datetime.utcnow())
+            .group_by(Event.id)
+            .order_by(Event.start_time.asc())
+            .limit(6)
+            .all()
+        )
+
+    # Showing RSVP preview for members
+    if user:
+        my_rsvps_preview = (
+            db.session.query(Event)
+            .join(RSVP, RSVP.event_id == Event.id)
+            .filter(RSVP.user_id == user.id, RSVP.status == "going")
+            .order_by(Event.start_time.asc())
+            .limit(4)
+            .all()
+        )
+
+    return render_template(
+        "home/home.html",
+        upcoming_events=upcoming_events,
+        recent_logs=recent_logs,
+        committee_rows=committee_rows,
+        my_rsvps_preview=my_rsvps_preview,
+    )
 
 
 # -----------------------------------------------------------------------------------
@@ -373,7 +428,7 @@ def home():
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
-    return render_template("events_list.html", events=events)
+    return render_template("events/list.html", events=events)
 
 @app.route("/events/<int:event_id>")
 def event_detail(event_id):
@@ -386,8 +441,7 @@ def event_detail(event_id):
 
     back_url = safe_referrer(url_for("list_events"))
 
-    return render_template("event_detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url)
-
+    return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url)
 
 @app.route("/my-rsvps")
 @login_required
@@ -401,7 +455,7 @@ def my_rsvps():
         .all()
     )
 
-    return render_template("my_rsvps.html", rows=rows)
+    return render_template("events/my_rsvps.html", rows=rows)
 
 
 # -----------------------------------------------------------------------------------
@@ -435,7 +489,7 @@ def admin_event_new():
         db.session.commit()
 
         return redirect(url_for("list_events"))
-    return render_template("admin_event_form.html", mode="create")
+    return render_template("events/form.html", mode="create")
 
 @app.route("/admin/events/<int:event_id>/edit", methods=["GET", "POST"])
 @committee_or_admin_required
@@ -456,7 +510,7 @@ def admin_event_edit(event_id):
         db.session.commit()
 
         return redirect(url_for("event_detail", event_id=event.id))
-    return render_template("admin_event_form.html", mode="edit", event=event)
+    return render_template("events/form.html", mode="edit", event=event)
 
 @app.route("/admin/events/<int:event_id>/delete", methods=["POST"])
 @committee_or_admin_required
@@ -526,7 +580,7 @@ def event_rsvps(event_id):
         .all()
     )
 
-    return render_template("event_rsvps.html", event=event, rows=rows)
+    return render_template("events/rsvps_list.html", event=event, rows=rows)
 
 
 # -----------------------------------------------------------------------------------
