@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tests.helpers import create_user, login
 from app import db, Event, RSVP
 
@@ -10,8 +10,8 @@ def test_form_rsvp_toggle(client, app):
         title="Event",
         description="",
         location="",
-        start_time=datetime.utcnow() + timedelta(days=1),
-        end_time=datetime.utcnow() + timedelta(days=1, hours=2),
+        start_time=datetime.now(timezone.utc) + timedelta(days=1),
+        end_time=datetime.now(timezone.utc) + timedelta(days=1, hours=2),
         created_by=u.id
     )
     db.session.add(e)

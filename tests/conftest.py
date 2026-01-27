@@ -6,11 +6,10 @@ def app(monkeypatch):
     flask_app.config.update(
         TESTING=True,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        WTF_CSRF_ENABLED=False,  # disable CSRF in tests
+        WTF_CSRF_ENABLED=False,
         SECRET_KEY="test-secret",
     )
 
-    # Disable Firestore + external HTTP calls
     monkeypatch.setattr("app.firestore_db", None)
     monkeypatch.setattr("app.call_rsvp_cloud_function", lambda *args, **kwargs: None)
     monkeypatch.setattr("app.log_action", lambda *args, **kwargs: None)

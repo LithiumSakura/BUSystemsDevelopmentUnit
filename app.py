@@ -4,7 +4,7 @@
 
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 
 import requests
@@ -181,7 +181,7 @@ def log_action(action, user=None, extra=None):
     if firestore_db is None:
         return
 
-    data = {"action": action, "timestamp": datetime.utcnow()}
+    data = {"action": action, "timestamp": datetime.now(timezone.utc).replace(tzinfo=None)}
 
     if user:
         data["user"] = user.email
@@ -394,7 +394,7 @@ def home():
 
     upcoming_events = (
         Event.query
-        .filter(Event.start_time >= datetime.utcnow())
+        .filter(Event.start_time >= datetime.now(timezone.utc).replace(tzinfo=None))
         .order_by(Event.start_time.asc())
         .limit(6)
         .all()
@@ -423,7 +423,7 @@ def home():
                 func.count(RSVP.user_id).label("going_count")
             )
             .outerjoin(RSVP, and_(RSVP.event_id == Event.id, RSVP.status == "going"))
-            .filter(Event.start_time >= datetime.utcnow())
+            .filter(Event.start_time >= datetime.now(timezone.utc).replace(tzinfo=None))
             .group_by(Event.id)
             .order_by(Event.start_time.asc())
             .limit(6)
