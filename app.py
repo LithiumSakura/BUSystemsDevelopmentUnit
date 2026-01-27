@@ -340,7 +340,8 @@ def register():
 
         existing = User.query.filter_by(email=email).first()
         if existing:
-            return "User already exists"
+            flash("An account with this email already exists. Please log in.", "warning")
+            return redirect(url_for("login"))
         
         user = User(
             first_name=first_name,
@@ -352,6 +353,7 @@ def register():
         db.session.add(user)
         db.session.commit()
 
+        flash("Account created. Please log in.", "success")
         return redirect(url_for("login"))
     return render_template("auth/register.html")
 
@@ -370,8 +372,10 @@ def login():
                 user=user
             )
 
+            flash("Logged in successfully.", "success")
             return redirect(url_for("home"))
-        return "Invalid credentials"
+        flash("Invalid email or password, please try again.", "danger")
+        return redirect(url_for("login"))
     return render_template("auth/login.html")
 
 @app.route("/logout")
@@ -379,6 +383,7 @@ def logout():
     session.pop("user", None)
     session.pop("role", None)
 
+    flash("Successfully logged out, see you soon.", "info")
     return redirect(url_for("home"))
 
 from sqlalchemy import func
@@ -497,6 +502,10 @@ def admin_event_new():
         creator = get_current_user()
         image_file = request.files.get("image")
         image_url = upload_event_image(image_file) if image_file and image_file.filename else None
+
+        if end_time <= start_time:
+            flash("End time must be after start time.", "danger")
+            return redirect(request.url)
 
         event = Event(
             title=title,
