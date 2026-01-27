@@ -27,15 +27,18 @@ The system uses a hybrid persistence model:
 * Events
 * RSVPs
 * Feedback
+
 Relational storage ensures data integrity, referential constraints, and transactional consistency.
 
 ### NoSQL Database (Semi-Structured Data)
 * Activity logs
 * Admin audit records
+
 Firestore was selected for its flexibility, scalability, and suitability for log-based data with evolving schemas.
 
 ### Cloud Storage (Unstructured Data)
 * Event images
+
 This separation ensures each data type is stored using the most appropriate technology.
 
 ## 4. Cloud Security
@@ -73,6 +76,7 @@ Unit tests are implemented using Pytest, covering:
 * Role-based access control
 * RSVP logic
 * API endpoints
+
 Tests can be executed using:
 ```pytest```
 
