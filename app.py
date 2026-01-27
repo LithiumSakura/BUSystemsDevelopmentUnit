@@ -9,7 +9,8 @@ from functools import wraps
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+from flask import Flask, render_template, request, redirect, url_for, session, abort, flash
+from flask_wtf.csrf import CSRFProtect
 from flask_sqlalchemy import SQLAlchemy
 from google.api_core.exceptions import PermissionDenied
 from google.cloud import firestore
@@ -36,6 +37,9 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 
+app.config["WTF_CSRF_TIME_LIMIT"] = 60 * 60
+csrf = CSRFProtect(app)
+
 cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
 IS_GAE = bool(os.getenv("GAE_ENV", "").startswith("standard"))
@@ -49,6 +53,8 @@ if not bucket_name:
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 else:
     app.config["UPLOAD_FOLDER"] = None
+
+IS_DEV = os.getenv("FLASK_ENV") == "development" or os.getenv("APP_ENV") == "development" or not IS_GAE
 
 
 # -----------------------------------------------------------------------------------
@@ -250,17 +256,22 @@ def upload_event_image(image_file):
 
 
 # -----------------------------------------------------------------------------------
-# Routes: Admin
+# Routes: Admin backdoors
 # -----------------------------------------------------------------------------------
 
 @app.route("/init-db")
 def init_db():
+    if not IS_DEV:
+        abort(404)
     db.create_all()
+
     return "DB initialised! You can now register/login."
 
 @app.route("/make-me-admin")
 @login_required
 def make_me_admin():
+    if not IS_DEV:
+        abort(404)
     user = get_current_user()
     user.role = "admin"
     db.session.commit()
@@ -600,6 +611,7 @@ def event_rsvps(event_id):
 # -----------------------------------------------------------------------------------
 
 @app.route("/api/events")
+@csrf.exempt
 def api_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
     return {
@@ -617,6 +629,7 @@ def api_events():
     }
 
 @app.route("/api/events/<int:event_id>/rsvp", methods=["POST"])
+@csrf.exempt
 @login_required
 def api_toggle_rsvp(event_id):
     user = get_current_user()
