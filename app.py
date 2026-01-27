@@ -39,12 +39,14 @@ app.secret_key = os.getenv("SECRET_KEY")
 
 cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
-# Local upload config
-app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+bucket_name = os.getenv("BUCKET_NAME")
 
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+if not bucket_name:
+    IS_GAE = bool(os.getenv("GAE_ENV", "").startswith("standard"))
+    app.config["UPLOAD_FOLDER"] = "/tmp/uploads" if IS_GAE else os.path.join("static", "uploads")
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+else:
+    app.config["UPLOAD_FOLDER"] = None
 
 
 # -----------------------------------------------------------------------------------
@@ -223,9 +225,10 @@ def upload_event_image(image_file):
 
         ext = image_file.filename.rsplit(".", 1)[1].lower()
         blob_name = f"event-images/{uuid.uuid4().hex}.{ext}"
-        blob = bucket.blob(blob_name)
 
+        blob = bucket.blob(blob_name)
         blob.upload_from_file(image_file.stream, content_type=image_file.mimetype)
+
         return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
 
     # Fallback for local development
