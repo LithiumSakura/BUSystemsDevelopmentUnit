@@ -1,47 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Admin: User management{% endblock %}
 {% block content %}
+
 <h1>User Role Management</h1>
 <br>
-<table border="1" cellpadding="8">
-    <tr>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Committee</th>
-        <th>Position</th>
-        <th>Save</th>
-    </tr>
 
-    {% for u in users %}
-    <tr>
-        <form method="post">
-        <td>{{ u.first_name }} {{ u.last_name }}</td>
-        <td>{{ u.email }}</td>
+<div class="container py-4">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <table border="1" cellpadding="8">
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Committee</th>
+                    <th>Position</th>
+                    <th>Save</th>
+                </tr>
 
-        <td style="text-align:center;">
-            <input type="checkbox" name="is_committee"
-                {% if u.role == "committee" %}checked{% endif %}>
-        </td>
+                {% for u in users %}
+                <tr>
+                    <form method="post">
+                    <td>{{ u.first_name }} {{ u.last_name }}</td>
+                    <td>{{ u.email }}</td>
 
-        <td>
-            <select name="committee_position">
-            <option value="">—</option>
-            {% for pos in ["President", "Secretary", "Treasurer"] %}
-                <option value="{{ pos }}"
-                {% if u.committee_position == pos %}selected{% endif %}>
-                {{ pos }}
-                </option>
-            {% endfor %}
-            </select>
-        </td>
+                    <td style="text-align:center;">
+                        <input type="checkbox" name="is_committee"
+                            {% if u.role == "committee" %}checked{% endif %}>
+                    </td>
 
-        <td>
-            <input type="hidden" name="user_id" value="{{ u.id }}">
-            <button type="submit">Update</button>
-        </td>
-        </form>
-    </tr>
-    {% endfor %}
-</table>
+                    <td>
+                        <select name="committee_position">
+                        <option value="">—</option>
+                        {% for pos in ["President", "Secretary", "Treasurer"] %}
+                            <option value="{{ pos }}"
+                            {% if u.committee_position == pos %}selected{% endif %}>
+                            {{ pos }}
+                            </option>
+                        {% endfor %}
+                        </select>
+                    </td>
+
+                    <td>
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <button type="submit">Update</button>
+                    </td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
 
 {% endblock %}

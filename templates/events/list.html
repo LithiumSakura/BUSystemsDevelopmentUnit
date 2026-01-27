@@ -4,36 +4,42 @@
 
 <h1 class="page-title">Events</h1>
 
-<div class="container my-4">
-  <div class="row g-4">
-    {% for event in events %}
-    <div class="col-md-6 col-lg-4">
-      <div class="card h-100 shadow-sm">
-        <div class="ratio ratio-16x9 event-hero">
-          <img
-            src="{{ event.image_url or url_for('static', filename='img/event-placeholder.png') }}"
-            class="w-100 h-100 object-fit-cover"
-            alt="Event image"
-          >
-        </div>
+<div class="container py-4">
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      <div class="container my-4">
+        <div class="row g-4">
+          {% for event in events %}
+          <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+              <div class="ratio ratio-16x9 event-hero">
+                <img
+                  src="{{ event.image_url or url_for('static', filename='img/event-placeholder.png') }}"
+                  class="w-100 h-100 object-fit-cover"
+                  alt="Event image"
+                >
+              </div>
 
-        <div class="card-body">
-          <h5 class="card-title">
-            <i class="bi bi-calendar-event text-primary me-1"></i>
-            {{ event.title }}
-          </h5>
-          <p class="card-text text-muted">
-            <i class="bi bi-geo-alt me-1"></i>{{ event.location }}
-          </p>
-          <p class="small text-secondary">
-            <i class="bi bi-clock me-1"></i>
-            {{ event.start_time.strftime("%d %b %Y, %H:%M") }}
-          </p>
-          <a href="{{ url_for('event_detail', event_id=event.id) }}" class="btn btn-outline-primary btn-sm">View details</a>
+              <div class="card-body">
+                <h5 class="card-title">
+                  <i class="bi bi-calendar-event text-primary me-1"></i>
+                  {{ event.title }}
+                </h5>
+                <p class="card-text text-muted">
+                  <i class="bi bi-geo-alt me-1"></i>{{ event.location }}
+                </p>
+                <p class="small text-secondary">
+                  <i class="bi bi-clock me-1"></i>
+                  {{ event.start_time.strftime("%d %b %Y, %H:%M") }}
+                </p>
+                <a href="{{ url_for('event_detail', event_id=event.id) }}" class="btn btn-outline-primary btn-sm">View details</a>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
-    {% endfor %}
   </div>
 </div>
 

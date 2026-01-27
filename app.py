@@ -16,6 +16,7 @@ from google.cloud import firestore
 from google.cloud import storage
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import and_
+from sqlalchemy import func
 from urllib.parse import urlparse
 from uuid import uuid4
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -357,6 +358,8 @@ def logout():
 
     return redirect(url_for("home"))
 
+from sqlalchemy import func
+
 @app.route("/")
 def home():
     user = get_current_user()
@@ -373,25 +376,23 @@ def home():
     committee_rows = []
     my_rsvps_preview = []
 
-    # Showing recent logs for admin
     if user and user.role == "admin":
         try:
-            recent_logs = (
+            logs_stream = (
                 firestore_db.collection("activity_logs")
                 .order_by("timestamp", direction=firestore.Query.DESCENDING)
                 .limit(5)
                 .stream()
             )
-            recent_logs = [log.to_dict() for log in recent_logs]
+            recent_logs = [doc.to_dict() for doc in logs_stream]
         except Exception:
             recent_logs = []
 
-    # Showing RSVP counts per upcoming events for committee
     if user and user.role in ["committee", "admin"]:
         committee_rows = (
             db.session.query(
                 Event,
-                db.func.count(RSVP.user_id).label("going_count")
+                func.count(RSVP.user_id).label("going_count")
             )
             .outerjoin(RSVP, and_(RSVP.event_id == Event.id, RSVP.status == "going"))
             .filter(Event.start_time >= datetime.utcnow())
@@ -401,7 +402,6 @@ def home():
             .all()
         )
 
-    # Showing RSVP preview for members
     if user:
         my_rsvps_preview = (
             db.session.query(Event)
@@ -417,7 +417,7 @@ def home():
         upcoming_events=upcoming_events,
         recent_logs=recent_logs,
         committee_rows=committee_rows,
-        my_rsvps_preview=my_rsvps_preview,
+        my_rsvps_preview=my_rsvps_preview
     )
 
 
