@@ -5,9 +5,6 @@ import json
 db = firestore.Client()
 
 def log_rsvp_change(request):
-    """
-    HTTP Cloud Function to log RSVP changes
-    """
     if request.method != "POST":
         return ("Method Not Allowed", 405)
 
