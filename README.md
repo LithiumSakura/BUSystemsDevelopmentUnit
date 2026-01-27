@@ -7,17 +7,17 @@ The system showcases secure cloud deployment, hybrid data persistence, RESTful A
 The application allows society members to browse events and manage RSVPs, while committee members and administrators can create events, view attendance, and manage users. The system is deployed on Google App Engine and integrates Google Cloud services.
 
 ## 2. Technology Stacks
-* Layer                   Technology
-* Front-end	              HTML, Jinja2, Bootstrap 5
-* Back-end	              Python, Flask
-* Relational Database	    SQL (via SQLAlchemy)
-* NoSQL Database	        Google Firestore
-* Object Storage	        Google Cloud Storage
-* APIs	                  Flask REST endpoints
-* Cloud Functions	        Google Cloud Functions
-* Deployment	            Google App Engine
-* Testing	                Pytest
-* Version Control	        GitHub
+###Technology (layer)
+* HTML, Jinja2, Bootstrap 5 (front-end)
+* Python, Flask (back-end)
+* SQL (via SQLAlchemy) (relational database)
+* Google Firestore (NoSQL database)
+* Google Cloud Storage (object storage)
+* Flask REST endpoints (APIs)
+* Google Cloud Functions (cloud functions)
+* Google App Engine (deployment)
+* Pytest (testing)
+* GitHub (version control)
 
 ## 3. Data Persistence Strategy
 The system uses a hybrid persistence model:
