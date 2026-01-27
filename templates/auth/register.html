@@ -12,6 +12,7 @@
                         <div class="text-muted">Join the society and RSVP to events.</div>
                     </div>
                     <form method="POST" class="needs-validation" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">First name</label>

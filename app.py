@@ -4,12 +4,13 @@
 
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+from flask import Flask, render_template, request, redirect, url_for, session, abort, flash
+from flask_wtf.csrf import CSRFProtect
 from flask_sqlalchemy import SQLAlchemy
 from google.api_core.exceptions import PermissionDenied
 from google.cloud import firestore
@@ -36,6 +37,9 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 
+app.config["WTF_CSRF_TIME_LIMIT"] = 60 * 60
+csrf = CSRFProtect(app)
+
 cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
 IS_GAE = bool(os.getenv("GAE_ENV", "").startswith("standard"))
@@ -50,6 +54,8 @@ if not bucket_name:
 else:
     app.config["UPLOAD_FOLDER"] = None
 
+IS_DEV = os.getenv("FLASK_ENV") == "development" or os.getenv("APP_ENV") == "development" or not IS_GAE
+
 
 # -----------------------------------------------------------------------------------
 # Database setup (SQLAlchemy & Firestore)
@@ -62,8 +68,62 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
-# Firestore (for activity logs)
+
+# Firestore
 firestore_db = firestore.Client()
+
+def utcnow_naive():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def mirror_event_to_firestore(event):
+    if not firestore_db:
+        return
+    try:
+        firestore_db.collection("events_mirror").document(str(event.id)).set({
+            "event_id": event.id,
+            "title": event.title,
+            "location": event.location,
+            "start_time": event.start_time.isoformat() if event.start_time else None,
+            "end_time": event.end_time.isoformat() if event.end_time else None,
+            "image_url": event.image_url,
+            "created_by": event.created_by,
+            "updated_at": utcnow_naive().isoformat(),
+        }, merge=True)
+    except Exception:
+        pass
+
+def delete_event_mirror(event_id: int):
+    if not firestore_db:
+        return
+    try:
+        firestore_db.collection("events_mirror").document(str(event_id)).delete()
+        firestore_db.collection("event_stats").document(str(event_id)).delete()
+    except Exception:
+        pass
+
+def update_event_stats_firestore(event_id: int, delta_going: int):
+    if not firestore_db:
+        return
+    try:
+        doc_ref = firestore_db.collection("event_stats").document(str(event_id))
+
+        @firestore.transactional
+        def _txn_update(transaction):
+            snap = doc_ref.get(transaction=transaction)
+            current = 0
+            if snap.exists:
+                current = int(snap.to_dict().get("going_count", 0))
+            new_val = max(0, current + delta_going)
+            transaction.set(doc_ref, {
+                "event_id": event_id,
+                "going_count": new_val,
+                "updated_at": utcnow_naive().isoformat()
+            }, merge=True)
+
+        transaction = firestore_db.transaction()
+        _txn_update(transaction)
+    except Exception:
+        pass
 
 
 # -----------------------------------------------------------------------------------
@@ -175,7 +235,7 @@ def log_action(action, user=None, extra=None):
     if firestore_db is None:
         return
 
-    data = {"action": action, "timestamp": datetime.utcnow()}
+    data = {"action": action, "timestamp": datetime.now(timezone.utc).replace(tzinfo=None)}
 
     if user:
         data["user"] = user.email
@@ -250,17 +310,22 @@ def upload_event_image(image_file):
 
 
 # -----------------------------------------------------------------------------------
-# Routes: Admin
+# Routes: Admin backdoors
 # -----------------------------------------------------------------------------------
 
 @app.route("/init-db")
 def init_db():
+    if not IS_DEV:
+        abort(404)
     db.create_all()
+
     return "DB initialised! You can now register/login."
 
 @app.route("/make-me-admin")
 @login_required
 def make_me_admin():
+    if not IS_DEV:
+        abort(404)
     user = get_current_user()
     user.role = "admin"
     db.session.commit()
@@ -329,7 +394,8 @@ def register():
 
         existing = User.query.filter_by(email=email).first()
         if existing:
-            return "User already exists"
+            flash("An account with this email already exists. Please log in.", "warning")
+            return redirect(url_for("login"))
         
         user = User(
             first_name=first_name,
@@ -341,6 +407,7 @@ def register():
         db.session.add(user)
         db.session.commit()
 
+        flash("Account created. Please log in.", "success")
         return redirect(url_for("login"))
     return render_template("auth/register.html")
 
@@ -359,8 +426,10 @@ def login():
                 user=user
             )
 
+            flash("Logged in successfully.", "success")
             return redirect(url_for("home"))
-        return "Invalid credentials"
+        flash("Invalid email or password, please try again.", "danger")
+        return redirect(url_for("login"))
     return render_template("auth/login.html")
 
 @app.route("/logout")
@@ -368,6 +437,7 @@ def logout():
     session.pop("user", None)
     session.pop("role", None)
 
+    flash("Successfully logged out, see you soon.", "info")
     return redirect(url_for("home"))
 
 from sqlalchemy import func
@@ -378,7 +448,7 @@ def home():
 
     upcoming_events = (
         Event.query
-        .filter(Event.start_time >= datetime.utcnow())
+        .filter(Event.start_time >= datetime.now(timezone.utc).replace(tzinfo=None))
         .order_by(Event.start_time.asc())
         .limit(6)
         .all()
@@ -407,7 +477,7 @@ def home():
                 func.count(RSVP.user_id).label("going_count")
             )
             .outerjoin(RSVP, and_(RSVP.event_id == Event.id, RSVP.status == "going"))
-            .filter(Event.start_time >= datetime.utcnow())
+            .filter(Event.start_time >= datetime.now(timezone.utc).replace(tzinfo=None))
             .group_by(Event.id)
             .order_by(Event.start_time.asc())
             .limit(6)
@@ -453,7 +523,55 @@ def event_detail(event_id):
 
     back_url = safe_referrer(url_for("list_events"))
 
-    return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url)
+    feedback_items = []
+    if firestore_db and session.get("role") in ["committee", "admin"]:
+        try:
+            snaps = firestore_db.collection("event_feedback") \
+                .document(str(event_id)) \
+                .collection("items") \
+                .order_by("created_at", direction=firestore.Query.DESCENDING) \
+                .limit(10) \
+                .stream()
+            feedback_items = [s.to_dict() for s in snaps]
+        except Exception:
+            feedback_items = []
+
+    return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url, feedback_items=feedback_items
+
+@app.post("/events/<int:event_id>/feedback")
+@login_required
+def submit_feedback(event_id):
+    if not firestore_db:
+        abort(503)
+
+    event = Event.query.get_or_404(event_id)
+    rating = int(request.form.get("rating", "0"))
+    comment = (request.form.get("comment") or "").strip()
+
+    if rating < 1 or rating > 5:
+        flash("Rating must be between 1 and 5.", "danger")
+        return redirect(url_for("event_detail", event_id=event_id))
+
+    if len(comment) > 500:
+        flash("Comment is too long (max 500 chars).", "danger")
+        return redirect(url_for("event_detail", event_id=event_id))
+
+    user = get_current_user()
+
+    firestore_db.collection("event_feedback") \
+        .document(str(event_id)) \
+        .collection("items") \
+        .add({
+            "event_id": event_id,
+            "user_email": user.email,
+            "rating": rating,
+            "comment": comment,
+            "created_at": firestore.SERVER_TIMESTAMP,
+        })
+
+    flash("Thanks! Your feedback was submitted.", "success")
+    return redirect(url_for("event_detail", event_id=event_id))
+
 
 @app.route("/my-rsvps")
 @login_required
@@ -487,6 +605,10 @@ def admin_event_new():
         image_file = request.files.get("image")
         image_url = upload_event_image(image_file) if image_file and image_file.filename else None
 
+        if end_time <= start_time:
+            flash("End time must be after start time.", "danger")
+            return redirect(request.url)
+
         event = Event(
             title=title,
             description=description,
@@ -499,6 +621,7 @@ def admin_event_new():
 
         db.session.add(event)
         db.session.commit()
+        mirror_event_to_firestore(event)
 
         return redirect(url_for("list_events"))
     return render_template("events/form.html", mode="create")
@@ -520,6 +643,7 @@ def admin_event_edit(event_id):
             event.image_url = upload_event_image(image_file)
 
         db.session.commit()
+        mirror_event_to_firestore(event)
 
         return redirect(url_for("event_detail", event_id=event.id))
     return render_template("events/form.html", mode="edit", event=event)
@@ -532,6 +656,7 @@ def admin_event_delete(event_id):
     RSVP.query.filter_by(event_id=event.id).delete()
     db.session.delete(event)
     db.session.commit()
+    delete_event_mirror(event_id)
 
     return redirect(url_for("list_events"))
 
@@ -552,12 +677,14 @@ def toggle_rsvp(event_id):
     rsvp = RSVP.query.filter_by(user_id=user.id, event_id=event.id).first()
     if rsvp:
         rsvp.status = "going" if is_going else "cancelled"
+        update_event_stats_firestore(event.id, -1)
     else:
         rsvp = RSVP(
             user_id=user.id,
             event_id=event.id,
             status="going" if is_going else "cancelled"
         )
+        update_event_stats_firestore(event.id, +1)
         db.session.add(rsvp)
         
     db.session.commit()
@@ -600,6 +727,7 @@ def event_rsvps(event_id):
 # -----------------------------------------------------------------------------------
 
 @app.route("/api/events")
+@csrf.exempt
 def api_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
     return {
@@ -617,6 +745,7 @@ def api_events():
     }
 
 @app.route("/api/events/<int:event_id>/rsvp", methods=["POST"])
+@csrf.exempt
 @login_required
 def api_toggle_rsvp(event_id):
     user = get_current_user()

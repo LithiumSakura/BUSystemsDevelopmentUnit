@@ -80,10 +80,56 @@
                     <a href="{{ url_for('login') }}" class="link-primary">Log in</a> to RSVP.
                 </p>
             {% endif %}
-                <div class="mt-4">
+                
+            {% if current_email %}
+                <hr class="my-4">
+                <h5 class="fw-bold">Event feedback</h5>
+                <form method="post" action="{{ url_for('submit_feedback', event_id=event.id) }}" class="mt-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-sm-3">
+                            <label class="form-label">Rating</label>
+                            <select name="rating" class="form-select" required>
+                                <option value="">Choose…</option>
+                                {% for r in range(1,6) %}
+                                    <option value="{{ r }}">{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-sm-9">
+                            <label class="form-label">Comment (optional)</label>
+                            <input name="comment" class="form-control" maxlength="500" placeholder="What did you think?">
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-primary mt-3" type="submit">Submit feedback</button>
+                </form>
+            {% endif %}
+            
+            {% if current_role in ["committee","admin"] %}
+                <hr class="my-4">
+                <h5 class="fw-bold">Recent feedback</h5>
+
+                {% if feedback_items and feedback_items|length > 0 %}
+                    <ul class="list-group">
+                        {% for f in feedback_items %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>{{ f.user_email }}</strong>
+                                    <span class="badge bg-dark">{{ f.rating }}/5</span>
+                                </div>
+                                {% if f.comment %}
+                                    <div class="text-muted small mt-1">{{ f.comment }}</div>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-muted">No feedback yet.</div>
+                {% endif %}
+            {% endif %}
+            
+            <div class="mt-4">
                     <a href="{{ back_url }}" class="btn btn-primary">Back</a>
                 </div>
-            </div>
             <div class="col-lg-5 d-flex flex-column align-items-lg-end">
                 <div class="event-image-wrapper rounded-4 overflow-hidden shadow-sm bg-light">
                     <img src="{{ event.image_url or url_for('static', filename='img/event-placeholder.png') }}" alt="Event image">
