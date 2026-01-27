@@ -13,9 +13,9 @@ from flask import Flask, render_template, request, redirect, url_for, session, a
 from flask_sqlalchemy import SQLAlchemy
 from google.api_core.exceptions import PermissionDenied
 from google.cloud import firestore
-from google.cloud import storage
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import and_
+from sqlalchemy import func
 from urllib.parse import urlparse
 from uuid import uuid4
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -38,12 +38,17 @@ app.secret_key = os.getenv("SECRET_KEY")
 
 cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
-# Local upload config
-app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
+IS_GAE = bool(os.getenv("GAE_ENV", "").startswith("standard"))
+bucket_name = os.getenv("BUCKET_NAME")
+
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+if not bucket_name:
+    app.config["UPLOAD_FOLDER"] = "/tmp/uploads" if IS_GAE else os.path.join("static", "uploads")
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+else:
+    app.config["UPLOAD_FOLDER"] = None
 
 
 # -----------------------------------------------------------------------------------
@@ -217,23 +222,31 @@ def upload_event_image(image_file):
     bucket_name = os.getenv("BUCKET_NAME")
 
     if bucket_name:
+        if storage is None:
+            abort(500, description="google-cloud-storage not installed but BUCKET_NAME is set.")
+
         client = storage.Client()
         bucket = client.bucket(bucket_name)
 
         ext = image_file.filename.rsplit(".", 1)[1].lower()
         blob_name = f"event-images/{uuid.uuid4().hex}.{ext}"
-        blob = bucket.blob(blob_name)
 
+        blob = bucket.blob(blob_name)
         blob.upload_from_file(image_file.stream, content_type=image_file.mimetype)
+
         return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
 
     # Fallback for local development
+    upload_dir = app.config.get("UPLOAD_FOLDER") or ("/tmp/uploads" if IS_GAE else os.path.join("static", "uploads"))
+    os.makedirs(upload_dir, exist_ok=True)
+
     ext = image_file.filename.rsplit(".", 1)[1].lower()
     filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    save_path = os.path.join(upload_dir, filename)
     image_file.save(save_path)
 
-    return url_for("static", filename=f"uploads/{filename}")
+    if upload_dir.startswith("static"):
+        return url_for("static", filename=f"uploads/{filename}")
 
 
 # -----------------------------------------------------------------------------------
@@ -287,7 +300,7 @@ def admin_users():
         )
 
         return redirect(url_for("admin_users"))
-    return render_template("admin_users.html", users=users)
+    return render_template("admin/users.html", users=users)
 
 @app.route("/admin/logs")
 @admin_required
@@ -299,7 +312,7 @@ def admin_logs():
         .stream()
     )
 
-    return render_template("admin_logs.html", logs=logs)
+    return render_template("admin/logs.html", logs=logs)
 
 
 # -----------------------------------------------------------------------------------
@@ -329,7 +342,7 @@ def register():
         db.session.commit()
 
         return redirect(url_for("login"))
-    return render_template("register.html")
+    return render_template("auth/register.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -348,7 +361,7 @@ def login():
 
             return redirect(url_for("home"))
         return "Invalid credentials"
-    return render_template("login.html")
+    return render_template("auth/login.html")
 
 @app.route("/logout")
 def logout():
@@ -357,13 +370,67 @@ def logout():
 
     return redirect(url_for("home"))
 
+from sqlalchemy import func
+
 @app.route("/")
 def home():
-    try:
-        user = get_current_user()
-    except OperationalError:
-        user = None
-    return render_template("home.html", user=user)
+    user = get_current_user()
+
+    upcoming_events = (
+        Event.query
+        .filter(Event.start_time >= datetime.utcnow())
+        .order_by(Event.start_time.asc())
+        .limit(6)
+        .all()
+    )
+
+    recent_logs = []
+    committee_rows = []
+    my_rsvps_preview = []
+
+    if user and user.role == "admin":
+        try:
+            logs_stream = (
+                firestore_db.collection("activity_logs")
+                .order_by("timestamp", direction=firestore.Query.DESCENDING)
+                .limit(5)
+                .stream()
+            )
+            recent_logs = [doc.to_dict() for doc in logs_stream]
+        except Exception:
+            recent_logs = []
+
+    if user and user.role in ["committee", "admin"]:
+        committee_rows = (
+            db.session.query(
+                Event,
+                func.count(RSVP.user_id).label("going_count")
+            )
+            .outerjoin(RSVP, and_(RSVP.event_id == Event.id, RSVP.status == "going"))
+            .filter(Event.start_time >= datetime.utcnow())
+            .group_by(Event.id)
+            .order_by(Event.start_time.asc())
+            .limit(6)
+            .all()
+        )
+
+    if user:
+        my_rsvps_preview = (
+            db.session.query(Event)
+            .join(RSVP, RSVP.event_id == Event.id)
+            .filter(RSVP.user_id == user.id, RSVP.status == "going")
+            .order_by(Event.start_time.asc())
+            .limit(4)
+            .all()
+        )
+
+    return render_template(
+        "home/home.html",
+        upcoming_events=upcoming_events,
+        recent_logs=recent_logs,
+        committee_rows=committee_rows,
+        my_rsvps_preview=my_rsvps_preview
+    )
 
 
 # -----------------------------------------------------------------------------------
@@ -373,7 +440,7 @@ def home():
 @app.route("/events")
 def list_events():
     events = Event.query.order_by(Event.start_time.asc()).all()
-    return render_template("events_list.html", events=events)
+    return render_template("events/list.html", events=events)
 
 @app.route("/events/<int:event_id>")
 def event_detail(event_id):
@@ -386,8 +453,7 @@ def event_detail(event_id):
 
     back_url = safe_referrer(url_for("list_events"))
 
-    return render_template("event_detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url)
-
+    return render_template("events/detail.html", event=event, existing_rsvp=existing_rsvp, back_url=back_url)
 
 @app.route("/my-rsvps")
 @login_required
@@ -401,7 +467,7 @@ def my_rsvps():
         .all()
     )
 
-    return render_template("my_rsvps.html", rows=rows)
+    return render_template("events/my_rsvps.html", rows=rows)
 
 
 # -----------------------------------------------------------------------------------
@@ -435,7 +501,7 @@ def admin_event_new():
         db.session.commit()
 
         return redirect(url_for("list_events"))
-    return render_template("admin_event_form.html", mode="create")
+    return render_template("events/form.html", mode="create")
 
 @app.route("/admin/events/<int:event_id>/edit", methods=["GET", "POST"])
 @committee_or_admin_required
@@ -456,7 +522,7 @@ def admin_event_edit(event_id):
         db.session.commit()
 
         return redirect(url_for("event_detail", event_id=event.id))
-    return render_template("admin_event_form.html", mode="edit", event=event)
+    return render_template("events/form.html", mode="edit", event=event)
 
 @app.route("/admin/events/<int:event_id>/delete", methods=["POST"])
 @committee_or_admin_required
@@ -526,7 +592,7 @@ def event_rsvps(event_id):
         .all()
     )
 
-    return render_template("event_rsvps.html", event=event, rows=rows)
+    return render_template("events/rsvps_list.html", event=event, rows=rows)
 
 
 # -----------------------------------------------------------------------------------

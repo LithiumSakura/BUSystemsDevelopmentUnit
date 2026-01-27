@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Admin: Logs{% endblock %}
+{% block content %}
+
+<h1>Activity Logs</h1>
+<br>
+
+<div class="container py-4">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <ul>
+                {% for log in logs %}
+                    {% set l = log.to_dict() %}
+                    <li>
+                        <b>{{ l.action }}</b>
+                        — {{ l.user_email if l.user_email else "system" }}
+                        — {{ l.timestamp }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

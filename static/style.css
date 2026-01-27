@@ -1,53 +1,41 @@
-:root{
-    --brand: #002f5d;
-    --brand-2: #00e4c1;
-    --radius: 1rem;
+.custom-navbar {
+    background-color: #002f5d;
 }
 
-.card {
-    border-radius: var(--radius) !important;
+.custom-navbar .nav-link,
+.custom-navbar .navbar-brand {
+    color: #ffffff;
 }
 
-.btn {
-    border-radius: 0.8rem;
-}
-
-main.container {
-    padding-top: 1.25rem;
-    padding-bottom: 2rem;
+.custom-navbar .nav-link:hover {
+    color: #01e2c4;
 }
 
 body {
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    background: #eaf4ff;
-    margin: 0;
+    background: #f6f9fc;
 }
 
 .page-title {
     margin: 18px 0 14px;
-    font-weight: 800;
 }
 
-form {
-    text-align: left;
-}
-
-/* Event media helpers */
-.event-hero {
-    overflow: hidden;
-}
-.event-card-img {
-    height: 200px;
+.event-hero img {
     object-fit: cover;
 }
+
 .event-image-wrapper {
     width: 100%;
     max-width: 420px;
     aspect-ratio: 1 / 1;
 }
+
 .event-image-wrapper img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+}
+
+.card {
+    border-radius: 1rem;
 }
