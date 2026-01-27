@@ -13,7 +13,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, a
 from flask_sqlalchemy import SQLAlchemy
 from google.api_core.exceptions import PermissionDenied
 from google.cloud import firestore
-from google.cloud import storage
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import and_
 from sqlalchemy import func
@@ -39,10 +38,13 @@ app.secret_key = os.getenv("SECRET_KEY")
 
 cloud_function_url = os.getenv("CLOUD_FUNCTION_URL")
 
+IS_GAE = bool(os.getenv("GAE_ENV", "").startswith("standard"))
 bucket_name = os.getenv("BUCKET_NAME")
 
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
 if not bucket_name:
-    IS_GAE = bool(os.getenv("GAE_ENV", "").startswith("standard"))
     app.config["UPLOAD_FOLDER"] = "/tmp/uploads" if IS_GAE else os.path.join("static", "uploads")
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 else:
@@ -220,6 +222,9 @@ def upload_event_image(image_file):
     bucket_name = os.getenv("BUCKET_NAME")
 
     if bucket_name:
+        if storage is None:
+            abort(500, description="google-cloud-storage not installed but BUCKET_NAME is set.")
+
         client = storage.Client()
         bucket = client.bucket(bucket_name)
 
@@ -232,12 +237,16 @@ def upload_event_image(image_file):
         return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
 
     # Fallback for local development
+    upload_dir = app.config.get("UPLOAD_FOLDER") or ("/tmp/uploads" if IS_GAE else os.path.join("static", "uploads"))
+    os.makedirs(upload_dir, exist_ok=True)
+
     ext = image_file.filename.rsplit(".", 1)[1].lower()
     filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    save_path = os.path.join(upload_dir, filename)
     image_file.save(save_path)
 
-    return url_for("static", filename=f"uploads/{filename}")
+    if upload_dir.startswith("static"):
+        return url_for("static", filename=f"uploads/{filename}")
 
 
 # -----------------------------------------------------------------------------------

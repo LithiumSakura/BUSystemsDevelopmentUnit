@@ -1,4 +1,16 @@
-/* Keep Bootstrap in charge. Only add small, consistent extras. */
+.custom-navbar {
+    background-color: #002f5d;
+}
+
+.custom-navbar .nav-link,
+.custom-navbar .navbar-brand {
+    color: #ffffff;
+}
+
+.custom-navbar .nav-link:hover {
+    color: #01e2c4;
+}
+
 
 body {
     background: #f6f9fc;
